@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>飛鏢報分訓練（語音版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Noto+Sans+TC:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* 沿用「飛鏢結鏢訓練」的麻靶米色、板黑、紅綠金；對戰兩方用藍／橘
+   版面：手機直式一畫面，上＝比分、中＝靶（左下右下放報分格）、下＝數字鍵 */
+:root{color-scheme:light;--bg:#f2ead6;--ink:#17130d;--panel:#fffaf0;--line:#d8cbab;--mut:#6b604c;--link:#1d5c38;--red:#c62828;--green:#1d7a45;--okc:#17653a;--ngc:#b3201f;--board:#121713;--cream:#f2ead6;--gold:#e0b341;--blue:#1d56a8;--org:#b4510f;--dline:#3b463d;--dmut:#cfc6b0;
+--num:"Barlow Condensed","Arial Narrow",sans-serif;--txt:"Noto Sans TC","PingFang TC",system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1310;--ink:#eee6d3;--panel:#182019;--line:#2b352d;--mut:#a59c88;--link:#7fd0a0;--okc:#6fd39a;--ngc:#ff8f87}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1310;--ink:#eee6d3;--panel:#182019;--line:#2b352d;--mut:#a59c88;--link:#7fd0a0;--okc:#6fd39a;--ngc:#ff8f87}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--txt);overflow-x:clip;-webkit-text-size-adjust:100%}
+body.playing{background:var(--board)}
+.view{max-width:480px;margin:0 auto;padding-block:14px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button{font:600 16px var(--txt);min-height:44px;padding:4px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button.big{background:var(--gold);border-color:var(--gold);color:#17130d;font-weight:800;font-size:21px;min-height:58px;width:100%}
+button:disabled{opacity:.4;cursor:default}
+h1{font:800 27px/1.2 var(--txt);margin:0}h2{font:800 18px/1.3 var(--txt);margin:0}
+.note{font-size:14px;color:var(--mut);margin:0}
+.stack{display:grid;gap:14px}
+/* 首頁 */
+.hero{background:var(--board);color:var(--cream);border-radius:16px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) 148px;gap:12px;align-items:center;margin-block:12px}
+.hero .q{font:800 22px/1.3 var(--txt);margin:0 0 4px}.hero .p{margin:0 0 10px;font-size:14px;color:var(--dmut)}
+.hero button{background:#1f2721;color:var(--cream);border-color:var(--dline);width:100%}
+.mode{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;text-align:left;width:100%;padding:14px 16px;border-radius:14px}
+.mode b{font:800 19px/1.3 var(--txt)}.mode span{font:400 14px/1.45 var(--txt);color:var(--mut);grid-column:1}
+.mode i{grid-column:2;grid-row:1/3;font:800 20px var(--num);color:var(--mut)}
+details{border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+summary{padding:12px 16px;cursor:pointer;font-weight:600;min-height:44px}summary span{color:var(--mut);font-weight:400;font-size:14px;display:block}
+.fields{display:grid;gap:16px}details .fields{padding:2px 16px 16px}
+.h{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:600;margin-bottom:6px}.h em{font:800 24px/1 var(--num);font-style:normal}
+.seg{display:flex;flex-wrap:wrap;gap:6px}.seg button{flex:1 1 0;min-width:fit-content;padding:4px 8px}
+.seg button small{display:block;font-size:12px;font-weight:400;opacity:.8}
+.sld{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:8px;align-items:center}
+.sld button{padding:0;font-size:22px}
+input[type=range]{width:100%;height:44px;accent-color:var(--green);margin:0;background:transparent}
+.sld.off{opacity:.4}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+/* 對戰畫面（固定深色記分板） */
+#play{height:100%;min-height:540px;max-width:480px;margin:0 auto;background:var(--board);color:var(--cream);padding-block:8px 10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;gap:8px;position:relative}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;color:var(--dmut)}
+.bar b{font:800 20px/1 var(--num);color:#fff}
+.bar button,.ov button,.fix button{background:#1f2721;color:var(--cream);border-color:var(--dline)}
+.bar button{min-height:40px;font-size:14px;padding:0 14px}
+.scs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sc{border-radius:14px;padding:6px 12px 8px;color:#fff;border:3px solid transparent;transition:opacity .25s,border-color .25s;display:grid;grid-template-columns:1fr auto;align-items:center}
+.sc.l{background:var(--blue)}.sc.r{background:var(--org)}
+.sc.idle{opacity:.5}.sc.act{border-color:#fff}
+.sc .nm{font-size:14px;font-weight:600}.sc .pips{display:flex;gap:4px;justify-content:flex-end}
+.pips i{width:9px;height:9px;border-radius:50%;border:2px solid #fff;opacity:.9}.pips i.f{background:#fff}
+.sc .v{font:800 clamp(46px,14vw,62px)/.95 var(--num);font-variant-numeric:tabular-nums;grid-column:1/3;text-align:center}
+.qs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.qs div{border:1px solid var(--dline);border-radius:12px;padding:5px 6px;text-align:center}.qs b{display:block;font:800 30px/1 var(--num);color:#fff;font-variant-numeric:tabular-nums}.qs span{font-size:13px;color:var(--dmut)}
+.stage{position:relative;container-type:size}
+.stage .bd{position:absolute;left:50%;top:0;width:min(100cqw,max(100cqh - 30px,min(100cqh,100cqw - 84px)));aspect-ratio:1;transform:translateX(-50%)}
+svg.dart{width:100%;height:100%;display:block;overflow:visible}
+svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-baseline:central}
+.ans{position:absolute;bottom:0;width:78px;height:54px;border-radius:12px;border:2px dashed var(--dline);background:#121713e6;display:grid;place-content:center;text-align:center}
+.ans.l{left:0}.ans.r{right:0}
+.ans b{font:800 32px/1 var(--num);color:#fff;font-variant-numeric:tabular-nums;min-height:32px;display:block}.ans span{font-size:12px;line-height:1.1;color:var(--dmut)}
+.ans.act{border:2px solid var(--gold)}
+.ans.ok{border:2px solid #45c97f;background:#12402a}.ans.ng{border:2px solid #ff7d72;background:#4a1715}
+.ans.ok span{color:#a9efc6}.ans.ng span{color:#ffc3bd}
+.tm{display:grid;gap:5px}.tm .row{display:flex;justify-content:space-between;font-size:15px;font-weight:600;min-height:24px;align-items:center}
+.tm .row b{font:800 23px/1 var(--num);color:#fff;font-variant-numeric:tabular-nums}
+.tl{height:5px;border-radius:3px;background:#2b352d;overflow:hidden}.tl i{display:block;height:100%;width:100%;background:var(--gold)}.tl i.hot{background:#ff6b5e}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;position:relative}
+.pad button{min-height:0;height:clamp(42px,6.9svh,58px);font:800 27px/1 var(--num);background:#222b24;border-color:var(--dline);color:#fff;border-radius:11px;padding:0}
+.pad button:active{background:#38463c}
+.pad .w{font:600 17px var(--txt)}.pad .go{background:var(--green);border-color:var(--green);font:800 19px var(--txt)}
+.fix{position:absolute;inset:0;background:#1a211b;border:2px solid #ff7d72;border-radius:14px;padding:10px 14px;display:grid;align-content:space-between;gap:6px;overflow:auto}
+.fix .ttl{font-size:15px;font-weight:600;color:#ffc3bd;display:flex;justify-content:space-between}
+.cmb{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto auto;align-items:center;text-align:center;gap:4px;color:var(--dmut)}
+.cmb div b{display:block;font:800 26px/1 var(--num);color:#fff}.cmb div span{font-size:14px}.cmb .s b{font-size:38px;color:var(--gold)}
+.ov{position:absolute;inset:0;background:#0b0f0cf2;z-index:5;display:grid;place-content:center;gap:10px;padding:24px;text-align:center}
+.ov button{min-width:240px;min-height:52px}.ov .big{min-height:56px}.ov button.big{background:var(--gold);color:#17130d;border-color:var(--gold)}
+.vbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;font-size:15px;color:var(--dmut)}
+.vbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vbar span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:#5b645c;margin-right:7px}
+.vbar.on span::before{background:#45c97f}.vbar.hot span{color:#fff}.vbar.hot span::before{background:var(--gold)}.vbar.ng span{color:#ffc3bd}.vbar.ng span::before{background:#ff7d72}
+.vbar button{min-height:44px;font-size:15px;padding:0 12px;background:#1f2721;color:var(--cream);border-color:var(--dline)}.vbar.hot button{border-color:var(--gold);color:#fff}
+.vt b{font:800 96px/1 var(--num);color:#fff;font-variant-numeric:tabular-nums}.vt p{margin:0 auto 8px;max-width:300px;min-height:52px;color:var(--cream);font-size:17px;text-wrap:balance}
+/* 落鏢 */
+@media(prefers-reduced-motion:no-preference){.dt{animation:fly .16s ease-in;transform-box:fill-box}@keyframes fly{from{opacity:0;transform:translateY(-26px) scale(1.5)}}}
+/* 檢討 */
+.res{background:var(--board);color:var(--cream);border-radius:16px;padding:16px;text-align:center;display:grid;gap:12px}
+.res .w{font:800 24px/1.3 var(--txt);color:#fff;text-wrap:balance}
+.res .p{font-size:15px;color:var(--dmut)}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tiles div{border:1px solid var(--dline);border-radius:12px;padding:8px 4px}
+.tiles b{display:block;font:800 30px/1.1 var(--num);color:#fff;font-variant-numeric:tabular-nums}.tiles span{font-size:13px;color:var(--dmut)}
+.fl{display:flex;gap:6px;align-items:center}.fl h2{flex:1}
+.lg{display:grid;gap:6px}
+.it{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:0 10px;align-items:center;text-align:left;padding:8px 12px;border-radius:12px;font-weight:400}
+.it .n{font:800 15px/1.2 var(--num);border-radius:7px;padding:4px 7px;min-width:38px;text-align:center;color:#fff;background:#4b5249}
+.it .n.l{background:var(--blue)}.it .n.r{background:var(--org)}
+.it .d{font:800 18px/1.25 var(--num);letter-spacing:.3px}.it .d small{font:400 13px var(--txt);color:var(--mut);display:block}
+.it .a{text-align:right;font-size:13px;line-height:1.3}.it .a b{font:800 22px/1 var(--num);display:block}
+.it.ok .a{color:var(--okc)}.it.ng .a{color:var(--ngc)}
+.it.ng{border-color:var(--red)}
+.exp{background:var(--board);border-radius:12px;padding:10px;color:var(--cream)}.exp .bdx{width:min(100%,290px);margin:0 auto}
+.exp p{margin:8px 0 0;text-align:center;font-size:15px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+/* 矮螢幕：數字鍵改 4 欄 3 列，空間留給靶面 */
+@media(max-height:740px){#play{gap:6px;min-height:500px}.bar button{min-height:34px}.sc{padding:3px 12px 5px}.sc .v{font-size:44px}.qs b{font-size:26px}
+.pad{grid-template-columns:repeat(4,1fr)}.pad>button{height:48px}.pad [data-k=del]{grid-area:1/4}.pad [data-k="0"]{grid-area:2/4}.pad [data-k=go]{grid-area:3/4}
+.fix{padding:6px 12px}.fix button.big{min-height:44px!important}.cmb .s b{font-size:30px}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main id="home" class="view">
+  <h1>飛鏢報分訓練</h1>
+  <div class="hero">
+    <div><p class="q">這三鏢幾分？</p><p class="p">看落點、心算、報分。</p><button id="heroAns">看答案</button></div>
+    <div id="heroBoard"></div>
+  </div>
+  <div class="stack">
+    <button class="mode" data-mode="battle"><b>實戰訓練</b><span>501 雙方對戰，每回合報出三鏢合計</span><i aria-hidden="true">›</i></button>
+    <button class="mode" data-mode="seq"><b>連續報分訓練</b><span>固定題數連續作答，最後檢討錯題</span><i aria-hidden="true">›</i></button>
+    <button class="mode" data-mode="single"><b>單題報分訓練</b><span>進入即出題，不限時，答錯立刻看解答</span><i aria-hidden="true">›</i></button>
+    <details id="inpBox" hidden><summary>輸入方式<span id="inpSum"></span></summary>
+      <div class="fields"><div class="seg" id="inp"></div>
+      <p class="note">語音模式用英文報分，例如 one forty、sixty，0 分說 no score。按鍵隨時可用。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本程式不錄音。</p></div>
+    </details>
+    <details id="ruleBox"><summary>硬靶規則<span id="ruleSum"></span></summary>
+      <div class="fields">
+        <div><div class="h">結鏢規則</div><div class="seg" id="rule"></div></div>
+        <div><div class="h">紅黑心分數</div><div class="seg" id="bull"></div></div>
+        <div id="bfWrap"><div class="h">紅黑心可作為結鏢</div><div class="seg" id="bf"></div></div>
+        <div><div class="h">爆鏢時的正確報分（實戰）</div><div class="seg" id="bust"></div></div>
+        <div><div class="h">音效</div><div class="seg" id="snd"></div></div>
+      </div>
+    </details>
+  </div>
+</main>
+
+<main id="setup" class="view" hidden>
+  <div class="top"><button id="back">返回</button><h1 id="suT"></h1></div>
+  <div class="stack">
+    <div><div class="h">等級</div><div class="seg" id="lv"></div><p class="note" id="lvNote" style="margin-top:8px"></p></div>
+    <div id="nWrap"><div class="h"><span>出題題數</span><em id="nV"></em></div><div class="sld" id="nS"></div></div>
+    <div><div class="h"><span>輸入時限</span><em id="limV"></em></div><div class="sld" id="limS"></div><div class="seg" id="limM" style="margin-top:6px"></div><p class="note" style="margin-top:6px">最後一鏢上靶後才開始倒數。</p></div>
+    <div><div class="h">每鏢上靶間隔</div><div class="seg" id="gap"></div></div>
+    <button class="big" id="start">開始</button>
+    <p class="note" id="suRule"></p>
+  </div>
+</main>
+
+<main id="play" hidden>
+  <div class="bar"><span id="pInfo"></span><button id="pause">暫停</button></div>
+  <div id="pTop"></div>
+  <div class="stage"><div class="bd" id="pBoard"></div>
+    <div class="ans l" id="aL"><b></b><span></span></div><div class="ans r" id="aR"><b></b><span></span></div></div>
+  <div class="tm"><div class="row"><span id="pMsg" aria-live="polite"></span><b id="pSec"></b></div><div class="tl"><i id="pBar"></i></div><div class="vbar" id="vbar" hidden><span aria-live="polite"></span><button type="button">重新收音</button></div></div>
+  <div class="pad" id="pad"></div>
+  <div class="ov vt" id="vt" hidden><h2 style="color:#fff">試音</h2><b id="vtN"></b><p id="vtM" aria-live="polite"></p><button class="big" id="vtRe">重新收音</button><button id="vtKey">這局改用按鍵</button><button id="vtHome">回首頁</button></div>
+  <div class="ov" id="ov" hidden><h2 style="color:#fff">已暫停</h2><button class="big" id="ovGo">繼續</button><button id="ovEnd">結束並檢討</button><button id="ovHome">放棄，回首頁</button></div>
+</main>
+
+<main id="result" class="view" hidden>
+  <div class="stack">
+    <div class="res" id="rHead"></div>
+    <p class="note" id="rVoice" hidden></p>
+    <div class="two"><button class="on" id="rAgain">再來一次</button><button id="rHome">回首頁</button></div>
+    <div class="fl"><h2>答題檢討</h2><button id="fBad">只看錯題</button><button id="fAll">全部</button></div>
+    <div class="lg" id="rList"></div>
+  </div>
+</main>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const DEF={rule:'double',bull:'split',bf:true,bust:'zero',snd:true,inp:'key',
+  battle:{lv:'normal',lim:10,inf:false,gap:2},seq:{lv:'normal',lim:10,inf:false,gap:2,n:10}};
+let S=JSON.parse(JSON.stringify(DEF));
+try{const o=JSON.parse(localStorage.getItem('scoreSet')||'{}');for(const k in DEF)if(k in o)S[k]=typeof DEF[k]==='object'?{...DEF[k],...o[k]}:o[k]}catch(e){}
+const save=()=>{try{localStorage.setItem('scoreSet',JSON.stringify(S))}catch(e){}};
+/* ---------- 核心：規則、靶面幾何、對局產生（不碰畫面） ---------- */
+const RULES={open:'Open Out',master:'Master Out',double:'Double Out',triple:'Triple Out'};
+const LV={expert:{name:'專家級',lo:3,hi:7,sig:[5.5,8],w:[0,12,30,34,24],nine:.035,c170:.08,maxForce:170},
+  normal:{name:'普通級',lo:6,hi:15,sig:[8,18],w:[5,9,13,15,15,13,11,9,6,4],nine:.012,c170:.06,maxForce:121},
+  novice:{name:'新手級',lo:10,hi:20,sig:[24,40],w:[2,3,5,8,11,13,14,13,12,10,9],nine:0,c170:0,maxForce:60}};
+const ORDER=[20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+const MM=[0,6.35,15.9,99,107,162,170,225];      // 標準硬靶半徑（mm）
+const PX=[0,12,27,91,106,152,168,200];          // 畫面半徑（得分圈略加寬，方便手機辨識）
+const rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+const gauss=()=>Math.sqrt(-2*Math.log(1-Math.random()))*Math.cos(2*Math.PI*Math.random());
+function wpick(w){let s=w.reduce((a,b)=>a+b,0)*Math.random();for(let i=0;i<w.length;i++)if((s-=w[i])<0)return i;return w.length-1}
+const interp=(r,A,B)=>{for(let i=1;i<A.length;i++)if(r<=A[i])return B[i-1]+(r-A[i-1])/(A[i]-A[i-1])*(B[i]-B[i-1]);return B[B.length-1]};
+
+function mk(k,n){
+  if(k==='sb')return S.bull==='split'?{k:'sb',n:25,v:25,l:'S-BULL'}:{k:'bull',n:50,v:50,l:'BULL'};
+  if(k==='db')return S.bull==='split'?{k:'db',n:25,v:50,l:'D-BULL'}:{k:'bull',n:50,v:50,l:'BULL'};
+  if(k==='bull')return{k:'bull',n:50,v:50,l:'BULL'};
+  if(k==='m')return{k:'m',n:0,v:0,l:'界外'};
+  return{k,n,v:n*({s:1,d:2,t:3}[k]),l:k.toUpperCase()+n};
+}
+function darts(){
+  const a=[];
+  for(let n=20;n>=1;n--)a.push(mk('t',n),mk('d',n),mk('s',n));
+  if(S.bull==='split')a.push(mk('sb'),mk('db'));else a.push(mk('bull'));
+  return a;
+}
+function fin(d){
+  const b=d.k==='bull'||d.k==='db';
+  switch(S.rule){
+    case'open':return d.v>0;
+    case'double':return d.k==='d'||d.k==='db'||(d.k==='bull'&&S.bf);
+    case'master':return d.k==='d'||d.k==='t'||d.k==='db'||(d.k==='bull'&&S.bf);
+    case'triple':return d.k==='t'||(b&&S.bf);
+  }
+}
+const minLeft=()=>({open:1,double:2,master:2,triple:3}[S.rule]);
+/* 結鏢路線：以 T20 得分、D20／D16 收尾為優先 */
+const TP={20:0,19:.3,18:.5,17:.7,16:.8,15:1},DP={20:0,16:0,8:1.6,12:1.8,10:1.8,18:1.9,4:2,14:2.2,6:2.2,2:2.4};
+const setupC=d=>d.k==='s'?1+(d.n<10?.3:0):d.k==='t'?3+(TP[d.n]??1.5):d.k==='d'?6:d.k==='sb'?2.5:5;
+function finC(d){
+  if(d.k==='bull'||d.k==='db'||d.k==='sb')return d.k==='sb'?1:3;
+  if(S.rule==='open')return d.k==='s'?0:d.k==='d'?1:1.5;
+  if(d.k==='d')return DP[d.n]??2.8;
+  return(S.rule==='triple'?0:1.5)+(TP[d.n]??1.5);
+}
+let cache=new Map();
+function routes(t,maxD){
+  if(t<1||t>180)return[];
+  const key=t+'|'+maxD;if(cache.has(key))return cache.get(key);
+  const A=darts(),by={};A.filter(fin).forEach(f=>(by[f.v]??=[]).push(f));
+  const out=(by[t]||[]).map(f=>[f]);
+  if(maxD>=2)A.forEach(a=>(by[t-a.v]||[]).forEach(f=>out.push([a,f])));
+  if(maxD>=3)for(let i=0;i<A.length;i++)for(let j=i;j<A.length;j++)(by[t-A[i].v-A[j].v]||[]).forEach(f=>out.push([A[i],A[j],f]));
+  const res=out.map(r=>{const s=r.slice(0,-1).sort((x,y)=>y.v-x.v),f=r[r.length-1];
+    return{r:[...s,f],c:r.length*100+s.reduce((a,d)=>a+setupC(d),0)+finC(f)}}).sort((a,b)=>a.c-b.c).slice(0,40);
+  cache.set(key,res);return res;
+}
+/* 瞄準點 */
+function aimFor(lv,r,dl){
+  let R=routes(r,dl);
+  if(lv==='novice'){
+    R=R.filter(x=>x.r.length===1||(r<=60&&x.r.slice(0,-1).every(d=>d.k==='s')));
+    if(R.length)return{...R[0].r[0],chk:true};
+    if(r<=62){ // 墊分：留 40／32／16 等好結分數
+      const c=[40,32,16,24,20,8,36,12,4,2].map(L=>r-L).find(v=>v>=1&&v<=20);
+      if(c)return{...mk('s',c),chk:true};
+    }
+    const x=Math.random();
+    return x<.4?mk(Math.random()<.3?'t':'s',20):x<.55?mk('s',19):x<.65?mk('s',18):x<.72?mk('sb'):mk('s',pick(ORDER));
+  }
+  if(R.length)return{...R[0].r[0],chk:true};
+  if(r>230||dl>1&&r>=130){return mk('t',Math.random()<.9?20:pick([19,18]))}
+  let best=null,bs=-1e9;
+  const C=[];for(let n=20;n>=15;n--)C.push(mk('t',n));for(let n=20;n>=1;n--)C.push(mk('s',n));C.push(mk('sb'));
+  for(const d of C){const L=r-d.v;if(L<minLeft()||(L<=180&&!routes(L,3).length&&L<=170))continue;
+    const sc=dl>1?d.v:(L===40||L===32?40:0)+(routes(L,1).length?6:0)+(routes(L,2).length?14:0)+(routes(L,3).length?6:0)+d.v*.4;
+    if(sc>bs){bs=sc;best=d}}
+  return best||mk('s',1);
+}
+function land(x,y){
+  const r=Math.hypot(x,y);let a=Math.atan2(x,-y)*180/Math.PI;if(a<0)a+=360;
+  const n=ORDER[Math.floor(((a+9)%360)/18)];
+  const d=r<MM[1]?mk('db'):r<MM[2]?mk('sb'):r<MM[3]?mk('s',n):r<MM[4]?mk('t',n):r<MM[5]?mk('s',n):r<MM[6]?mk('d',n):mk('m');
+  return{...d,rr:r,aa:a};
+}
+function aimXY(d){
+  if(d.n===25||d.k==='bull')return[0,0];
+  const a=ORDER.indexOf(d.n)*18*Math.PI/180,r=d.k==='t'?103:d.k==='d'?166:132;
+  return[r*Math.sin(a),-r*Math.cos(a)];
+}
+function throwAt(aim,sg){const[x,y]=aimXY(aim);return land(x+gauss()*sg,y+gauss()*sg)}
+function exact(aim){for(let i=0;i<80;i++){const h=throwAt(aim,4);if(h.l===aim.l)return h}const[x,y]=aimXY(aim);return land(x,y)}
+function toss(lv,aim,sg){
+  const keep=lv==='novice'?(aim.chk?.3:.02):.45;
+  let h;for(let i=0;i<12;i++){h=throwAt(aim,sg);if(h.k!=='m'||Math.random()<keep)return h}
+  return h.k==='m'&&!aim.chk?exact(aim):h;
+}
+const isMain=d=>d.k==='d'&&(d.n===20||d.n===16);
+const main=(r,dl,want)=>{const R=routes(r,dl);return want?R.find(x=>isMain(x.r[x.r.length-1])):R[0]};
+/* 單一選手的一局。noFin：不讓他結鏢；force：第幾回合一定結鏢 */
+function simLeg(lv,o){
+  const turns=[];let r=501;
+  for(let rd=1;rd<=o.max;rd++){
+    if(o.stopAt&&r===o.stopAt)return{turns,r,done:false,hit:true};
+    const forced=o.force===rd;
+    if(forced&&(r>LV[lv].maxForce||!main(r,3,o.want)))return{turns,r,done:false};
+    const start=r,ds=[];let bust=false,done=false;
+    for(let dl=3;dl>0;dl--){
+      const aim=forced?{...main(r,dl,o.want).r[0],chk:true}:aimFor(lv,r,dl);
+      let h=forced?exact(aim):toss(lv,aim,o.sg);
+      if(o.noFin)for(let i=0;i<40&&r-h.v===0&&fin(h);i++)h=i>30?land(0,-180):toss(lv,aim,o.sg);
+      ds.push(h);r-=h.v;
+      if(r===0&&fin(h)){done=true;break}
+      if(r<minLeft()){bust=true;break}
+    }
+    const sum=ds.reduce((a,d)=>a+d.v,0);
+    if(bust)r=start;
+    turns.push({ds,sum,bust,start,end:r,fin:done});
+    if(done)return{turns,r:0,done:true};
+  }
+  return{turns,r,done:false};
+}
+const script=(labels,start)=>{const ds=labels.map(([k,n])=>exact(mk(k,n)));const sum=ds.reduce((a,d)=>a+d.v,0);return{ds,sum,bust:false,start,end:start-sum,fin:start===sum}};
+const T3=[['t',20],['t',20],['t',20]];
+function nineDarter(){
+  const e=S.rule==='triple'?[[['t',20],['t',19],['t',8]]]:[[['t',20],['t',19],['d',12]],[['t',20],['t',19],['d',12]],[['t',17],['t',18],['d',18]],[['t',19],['t',16],['d',18]]];
+  return[script(T3,501),script(T3,321),script(pick(e),141)];
+}
+const can170=()=>fin(mk('db'));
+/* 回合數越多，出手散布越大 */
+function seedLeg(lv,R){const c=LV[lv],[a,b]=c.sig;if(!R)return rnd(a,a+(b-a)*.6);const p=(R-c.lo)/(c.hi-c.lo);return a+(b-a)*Math.max(0,Math.min(1,p+rnd(-.2,.2)))}
+function winnerLeg(lv){
+  const c=LV[lv],x=Math.random();
+  if(x<c.nine)return{turns:nineDarter(),tag:'九鏢結鏢'};
+  if(x<c.nine+c.c170&&can170()){
+    for(let i=0;i<3000;i++){
+      const L=simLeg(lv,{max:c.hi,sg:seedLeg(lv),stopAt:170,noFin:true});
+      const n=L.turns.length+1;
+      if(L.hit&&n>=c.lo&&n<=c.hi)return{turns:[...L.turns,script([['t',20],['t',20],['db']],170)],tag:'170 結鏢'};
+    }
+  }
+  let R=c.lo+wpick(c.w);
+  const want=lv!=='novice'&&S.rule!=='triple'&&Math.random()<.8;
+  for(let k=0;k<14;k++){
+    for(const force of[0,R])for(let i=0;i<220;i++){
+      const L=simLeg(lv,{max:R,sg:seedLeg(lv,R),force,want});
+      const t=L.turns[L.turns.length-1];
+      if(L.done&&L.turns.length===R&&(!want||isMain(t.ds[t.ds.length-1])))return{turns:L.turns};
+    }
+    R=c.lo+wpick(c.w);
+  }
+  return null;
+}
+/* 兩人對戰一局 */
+function genMatch(lv){
+  const c=LV[lv],first=Math.random()<.5?0:1;
+  let W=lv==='novice'&&Math.random()<.3?null:winnerLeg(lv);
+  const seq=[];
+  if(!W){
+    const P=[0,1].map(()=>simLeg(lv,{max:c.hi,sg:seedLeg(lv),noFin:true}).turns);
+    for(let i=0;i<c.hi;i++)for(const s of[first,1-first])seq.push({...P[s][i],side:s,rd:i+1});
+    return{seq:seq.map(place),winner:-1,rounds:c.hi,first};
+  }
+  const w=Math.random()<.5?0:1,n=W.turns.length;
+  const L=simLeg(lv,{max:n,sg:seedLeg(lv,n),noFin:true}).turns;
+  for(let i=0;i<n;i++)for(const s of[first,1-first]){
+    const t=s===w?W.turns[i]:L[i];
+    seq.push({...t,side:s,rd:i+1});
+    if(t.fin)return{seq:seq.map(place),winner:w,rounds:n,tag:W.tag,first};
+  }
+}
+/* 連續／單題：從該等級的完整對局中抽三鏢 */
+function genTurns(lv,n){
+  const out=[],seen=new Set();
+  for(let g=0;out.length<n&&g<400;g++){
+    const l=lv==='mix'?pick(['expert','normal','novice','novice']):lv;
+    let t;
+    if(l!=='novice'&&can170()&&Math.random()<.04)t=script([['t',20],['t',20],['db']],170);
+    else t=pick(simLeg(l,{max:LV[l].hi,sg:seedLeg(l)}).turns.filter(x=>x.ds.length===3));
+    if(!t)continue;
+    const key=t.ds.map(d=>d.l).sort().join();
+    if(seen.has(key)&&g<200)continue;
+    seen.add(key);out.push(place({...t,bust:false,fin:false}));
+  }
+  return out;
+}
+/* 落點→畫面座標：避開鋼絲、三鏢不重疊，確保看得出分區 */
+function ringOf(d){
+  const i=d.k==='db'||(d.k==='bull'&&d.rr<MM[1])?1:d.k==='sb'||d.k==='bull'?2:d.k==='t'?4:d.k==='d'?6:d.k==='m'?7:d.rr<MM[3]?3:5;
+  return[PX[i-1],PX[i],i];
+}
+function spot(d,r,a){
+  const[lo,hi,i]=ringOf(d);
+  const mg=i===1?0:i===2?5:i===7?12:Math.min(6,(hi-lo)*.34);
+  r=Math.max(i===1?0:i===3?44:lo+mg,Math.min(i===1?8:hi-mg,r));
+  if(i>=3&&i<=6){
+    const c=ORDER.indexOf(d.n)*18;let off=((a-c+540)%360)-180;
+    const half=9-Math.min(5.2,6.5/r*180/Math.PI);
+    off=Math.max(-half,Math.min(half,off));a=c+off;
+  }
+  const q=a*Math.PI/180;return{x:200+r*Math.sin(q),y:200-r*Math.cos(q)};
+}
+function place(t){
+  const P=[];
+  const ds=t.ds.map(d=>{
+    const[lo,hi,i]=ringOf(d),r0=interp(d.rr,MM,PX);
+    let best=null,bd=-1;
+    for(let k=0;k<90;k++){
+      const s=k?.12*k:0;
+      const p=i===1?spot(d,k?rnd(0,8):r0,rnd(0,360)):spot(d,r0+gauss()*s*2,d.aa+gauss()*s*1.2);
+      const m=P.length?Math.min(...P.map(q=>Math.hypot(q.x-p.x,q.y-p.y))):99;
+      if(m>bd){bd=m;best=p}
+      if(m>=11)break;
+    }
+    P.push(best);
+    return{k:d.k,n:d.n,v:d.v,l:d.l,x:best.x,y:best.y};
+  });
+  const ox=ds.map((d,i)=>i).sort((a,b)=>ds[a].x-ds[b].x),fan=ds.length===1?[12]:ds.length===2?[-24,24]:[-30,4,34];
+  ox.forEach((id,j)=>ds[id].rot=fan[j]);
+  return{...t,ds};
+}
+
+/* ---------- 英文報分 → 數字。只看聽到的字，不看正確答案 ---------- */
+const W={one:1,won:1,two:2,to:2,too:2,three:3,tree:3,free:3,four:4,for:4,fore:4,five:5,six:6,sex:6,sicks:6,seven:7,eight:8,ate:8,nine:9,nein:9,
+  ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,
+  twenty:20,thirty:30,thirdy:30,dirty:30,thirsty:30,forty:40,fourty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90,nighty:90,
+  zero:0,oh:0,o:0};
+const UN=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const TE=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+const words=n=>n===0?'no score':n>=100?'one hundred'+(n%100?' and '+words(n%100):''):n<20?UN[n]:TE[n/10|0]+(n%10?'-'+UN[n%10]:'');
+const NOSCORE=/^(no|know|now|nose?) (s[ckq][a-z']*|stores?)$|^(nose?|know) ?core$|^noscore$|^(zero|nil|nothing|bust|busted|0)$/; // 沒有任何數字是 sc／sk／sq 開頭
+const SKIP=new Set(['and','n','a','an','um','uh','er','points','point','score','scored','scores','the','please']);
+function parseScore(txt){
+  let s=String(txt||'').toLowerCase().replace(/[’]/g,"'").replace(/(\d),(?=\d{3}\b)/g,'$1').replace(/[^a-z0-9' ]+/g,' ')
+    .replace(/(\d+)(st|nd|rd|th|s)\b/g,'$1').replace(/\b(for|four) (tea|t|tee)\b/g,'forty').replace(/\s+/g,' ').trim();
+  if(!s)return null;
+  if(NOSCORE.test(s))return 0;
+  const A=[];
+  for(const w of s.split(' ')){
+    if(/^\d+$/.test(w))A.push(+w);
+    else if(w==='hundred'||w==='hundreds')A.push('H');
+    else if(/^(ton|tons|tonne|tun)$/.test(w))A.push('T');
+    else if(w in W)A.push(W[w]);
+    else if(!SKIP.has(w))return null;          // 有聽不懂的字就不猜
+  }
+  const v=val(A);
+  if(v!=null)return v>=0&&v<=180?v:null;
+  const h=A.length/2;                          // 同一個分數唸兩次
+  if(h>=1&&h%1===0&&A.slice(0,h).join()===A.slice(h).join()){const x=val(A.slice(0,h));return x!=null&&x<=180?x:null}
+  return null;
+}
+const tens=x=>x>=20&&x<=90&&x%10===0, unit=x=>x>=1&&x<=9;
+function low(A){ // 0–99
+  if(A.length===1&&typeof A[0]==='number'&&A[0]<100)return A[0];
+  if(A.length===2&&tens(A[0])&&unit(A[1]))return A[0]+A[1];
+  if(A.length===2&&A[0]===0&&unit(A[1]))return A[1];
+  return null;
+}
+function val(A){
+  if(!A.length)return null;
+  const m=A.findIndex(x=>x==='H'||x==='T');
+  if(m>=0){
+    if(A[m]==='H'?!(m===0||m===1&&(A[0]===1)):m!==0)return null;
+    const r=A.slice(m+1);if(!r.length)return 100;
+    const l=low(r);return l==null?null:100+l;
+  }
+  if(A.length===1)return A[0];
+  let l=low(A);if(l!=null)return l;
+  if(A[0]===100||A[0]===1){l=low(A.slice(1));
+    if(l!=null&&(A[0]===100||l>=10||A.length===3&&A[1]===0))return 100+l}
+  if(A[0]===10&&tens(A[1])){l=low(A.slice(1));if(l!=null)return 100+l}   // ton forty 被聽成 ten forty
+  if(A.length<=3&&A.every(x=>x>=0&&x<=9))return+A.join('');            // 逐位唸 one four zero
+  return null;
+}
+
+/* ---------- 靶面 ---------- */
+const BLACK='#1b1b1b',CREAM='#f1e3bf',RED='#d0312d',GREEN='#1f8a4c';
+const pt=(r,a)=>{a=a*Math.PI/180;return[(200+r*Math.sin(a)).toFixed(2),(200-r*Math.cos(a)).toFixed(2)]};
+function sector(r1,r2,a1,a2){const[p,q]=pt(r2,a1),[s,t]=pt(r2,a2),[u,v]=pt(r1,a2),[w,x]=pt(r1,a1);
+  return`M${p} ${q}A${r2} ${r2} 0 0 1 ${s} ${t}L${u} ${v}A${r1} ${r1} 0 0 0 ${w} ${x}Z`}
+const BASE=(()=>{
+  let g='<circle cx="200" cy="200" r="200" fill="#080a08"/>';
+  ORDER.forEach((n,i)=>{const a=i*18-9,b=i*18+9,dk=i%2===0,s=dk?BLACK:CREAM,m=dk?RED:GREEN;
+    [[PX[5],PX[6],m],[PX[4],PX[5],s],[PX[3],PX[4],m],[PX[2],PX[3],s]].forEach(([r1,r2,f])=>g+=`<path d="${sector(r1,r2,a,b)}" fill="${f}" stroke="#b9b4a6" stroke-width=".9"/>`);
+    const[x,y]=pt(184,i*18);g+=`<text class="num" x="${x}" y="${y}">${n}</text>`});
+  return g+`<circle cx="200" cy="200" r="${PX[2]}" fill="${GREEN}" stroke="#b9b4a6"/><circle cx="200" cy="200" r="${PX[1]}" fill="${RED}" stroke="#b9b4a6"/>`;
+})();
+const dartBody=(d,c)=>{let rot=-d.rot;const q=rot*Math.PI/180,dx=200-d.x,dy=200-d.y;
+  if(Math.hypot(d.x-50*Math.sin(q)-200,d.y+50*Math.cos(q)-200)>166)rot=Math.atan2(-dx,dy)*180/Math.PI+d.rot*.35; // 鏢身朝靶心，不蓋住外圈數字
+  return`<g transform="translate(${d.x.toFixed(1)} ${d.y.toFixed(1)}) rotate(${rot})"><g class="dt"><path d="M0 2V12" stroke="#e8e8e8" stroke-width="1.6"/><path d="M0 11V27" stroke="#0009" stroke-width="6" stroke-linecap="round"/><path d="M0 11V27" stroke="#c9ccd0" stroke-width="4" stroke-linecap="round"/><path d="M0 28V36" stroke="#333" stroke-width="2.4"/><path d="M0 33L7 40V49L0 46L-7 49V40Z" fill="${c}" stroke="#fff" stroke-width="1"/></g></g>`};
+const dartTip=(d,c)=>`<circle class="dt" cx="${d.x.toFixed(1)}" cy="${d.y.toFixed(1)}" r="4.8" fill="${c}" stroke="#fff" stroke-width="2" style="filter:drop-shadow(0 0 1.5px #000)"/>`;
+const COL=['#2f7de0','#f08a24','#e0b341'];
+const boardSVG=(ds,c)=>`<svg class="dart" viewBox="0 0 400 400" role="img" aria-label="飛鏢靶">${BASE}<g>${ds.map(d=>dartBody(d,c)).join('')}</g><g>${ds.map(d=>dartTip(d,c)).join('')}</g></svg>`;
+
+/* ---------- 音效 ---------- */
+let AC=null;
+function ctx(){try{AC??=new(window.AudioContext||window.webkitAudioContext)();if(AC.state!=='running')AC.resume().catch(()=>{})}catch(e){}return AC}
+function audio(){return S.snd?ctx():null}
+function tone(f,t,len,type='sine',vol=.25){const a=audio();if(!a)return;const o=a.createOscillator(),g=a.createGain(),s=a.currentTime+t;
+  o.type=type;o.frequency.value=f;g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol,s+.01);g.gain.exponentialRampToValueAtTime(.001,s+len);
+  o.connect(g).connect(a.destination);o.start(s);o.stop(s+len+.02)}
+const SFX={ok(){tone(1319,0,.35);tone(2637,0,.2,'sine',.06);tone(1047,.2,.6);tone(2093,.2,.3,'sine',.06)},
+  ng(){tone(170,0,.2,'square',.16);tone(140,.24,.42,'square',.16)},
+  win(){[784,988,1175,1568].forEach((f,i)=>tone(f,.75+i*.13,.4,'triangle',.22))},
+  hit(){const a=audio();if(!a)return;const n=a.sampleRate*.07|0,b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);
+    for(let i=0;i<n;i++)c[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);
+    const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();s.buffer=b;f.type='lowpass';f.frequency.value=900;g.gain.value=.6;s.connect(f).connect(g).connect(a.destination);s.start();tone(120,0,.08,'sine',.3)}};
+
+/* ---------- 設定 ---------- */
+function show(v){['home','setup','play','result'].forEach(k=>$(k).hidden=k!==v);document.body.classList.toggle('playing',v==='play');scrollTo(0,0)}
+function seg(id,opts,get,set){const el=$(id);
+  const paint=()=>{el.innerHTML=opts.map(([v,l,s])=>`<button type="button" aria-pressed="${String(get())===String(v)}" class="${String(get())===String(v)?'on':''}" data-v="${v}">${l}${s?`<small>${s}</small>`:''}</button>`).join('')};
+  el.onclick=e=>{const b=e.target.closest('button');if(!b)return;set(opts.find(o=>String(o[0])===b.dataset.v)[0]);save();paint();
+    el.querySelector(`[data-v="${b.dataset.v}"]`)?.focus({preventScroll:true})};paint()}
+function slider(id,out,lo,hi,get,set,fmt,label){const el=$(id);
+  el.innerHTML=`<button type="button" aria-label="${label}減少">−</button><input type="range" id="${id}R" min="${lo}" max="${hi}" step="1" aria-label="${label}"><button type="button" aria-label="${label}增加">＋</button>`;
+  const[a,r,b]=el.children,paint=()=>{r.value=get();$(out).textContent=fmt(get())};
+  const put=v=>{set(Math.max(lo,Math.min(hi,v)));save();paint()};
+  a.onclick=()=>put(get()-1);b.onclick=()=>put(get()+1);r.oninput=()=>put(+r.value);paint()}
+function ruleUI(){
+  const ch=()=>{cache=new Map();ruleUI()};
+  seg('rule',[['open','Open Out'],['master','Master Out'],['double','Double Out'],['triple','Triple Out']],()=>S.rule,v=>{S.rule=v;ch()});
+  seg('bull',[['split','25 / 50'],['fat','50 / 50']],()=>S.bull,v=>{S.bull=v;ch()});
+  seg('bf',[[true,'可以'],[false,'不行']],()=>S.bf,v=>{S.bf=v;ch()});
+  seg('bust',[['zero','報 0 分','正式計分'],['sum','報三鏢合計','純練加法']],()=>S.bust,v=>{S.bust=v;ch()});
+  seg('snd',[[true,'開'],[false,'關']],()=>S.snd,v=>{S.snd=v;if(v)SFX.ok()});
+  $('inpBox').hidden=!VOK;
+  if(VOK){seg('inp',[['key','按鍵'],['voice','語音＋按鍵']],()=>S.inp,v=>{S.inp=v;if(v==='key')V.close();$('inpSum').textContent=inpText()});$('inpSum').textContent=inpText()}
+  $('bfWrap').hidden=!(S.rule==='triple'||S.bull==='fat'&&S.rule!=='open');
+  $('ruleSum').textContent=ruleText();
+}
+const inpText=()=>voiceOn()?'語音＋按鍵（英文報分）':'按鍵';
+const ruleText=()=>`紅黑心 ${S.bull==='split'?'25 / 50':'50 / 50'}・${RULES[S.rule]}${$('bfWrap').hidden||S.bf?'':'（紅黑心不可結鏢）'}`;
+const LVNOTE={battle:{expert:'3～7 回合內結鏢。T20 得分，D20／D16 收尾，偶爾出現九鏢或 170 結鏢。',normal:'6～15 回合內結鏢。T20 得分，D20／D16 收尾，偶爾出現九鏢（3 回合）或 170 結鏢。',novice:'10～20 回合內結鏢，也可能雙方都結不了。落點較隨機，結鏢階段偶有界外鏢。'},
+  seq:{expert:'落點取自專家級對局：T20 為主，收尾多為 D20／D16。',normal:'落點取自普通級對局：瞄 T20，偏差較大。',novice:'落點取自新手級對局：分布隨機，偶有界外鏢（0 分）。'}};
+let MODE='battle';
+function setup(m){
+  MODE=m;const c=S[m];
+  $('suT').textContent=m==='battle'?'實戰訓練':'連續報分訓練';
+  $('nWrap').hidden=m!=='seq';
+  const note=()=>$('lvNote').textContent=LVNOTE[m][c.lv];
+  seg('lv',[['expert','專家級'],['normal','普通級'],['novice','新手級']],()=>c.lv,v=>{c.lv=v;note()});note();
+  if(m==='seq')slider('nS','nV',5,20,()=>c.n,v=>c.n=v,v=>v+' 題','題數');
+  const lim=()=>{$('limV').textContent=c.inf?'無時限':c.lim+' 秒';$('limS').classList.toggle('off',c.inf)};
+  const limSeg=()=>seg('limM',[[false,'限時'],[true,'無時限']],()=>c.inf,v=>{c.inf=v;lim()});
+  slider('limS','limV',3,20,()=>c.lim,v=>{c.lim=v;c.inf=false;limSeg();$('limS').classList.remove('off')},v=>v+' 秒','時限秒數');
+  limSeg();lim();
+  seg('gap',[[2,'2 秒'],[4,'4 秒'],[6,'6 秒']],()=>c.gap,v=>c.gap=v);
+  $('suRule').textContent='目前規則：'+ruleText()+(VOK?'・輸入：'+inpText():'');
+  show('setup');
+}
+
+/* ---------- 進行 ---------- */
+let G=null,T=0,last=0,Qe=[],paused=false;
+const after=(ms,fn)=>Qe.push({t:T+ms,fn});
+/* ---------- 語音：收音引擎 ----------
+   iPhone Safari 實測：整局開一次不關、音效全程開著，斷了才接得回來 */
+const SRC=window.SpeechRecognition||window.webkitSpeechRecognition;
+const VOK=!!SRC&&isSecureContext&&location.protocol!=='file:'&&window.top===window&&!/ Claude\/|Line\/|FBAN|FBAV|Instagram|MicroMessenger/i.test(navigator.userAgent);
+const voiceOn=()=>VOK&&S.inp==='voice';
+const ANDROID=/Android/.test(navigator.userAgent);
+const VERR={'not-allowed':'沒有麥克風權限，請到網站設定改成允許','service-not-allowed':'系統不允許語音服務，請確認已開啟聽寫','audio-capture':'找不到麥克風','language-not-supported':'這支裝置不支援英文辨識'};
+const V={on:false,rec:null,live:false,err:'',bad:false,heard:false,res:[],base:0,skip:-1,mode:'',last:'',cb:null,early:null,en:0,tries:0,renew:0,since:0,tm:0,
+  open(){if(this.on)return;this.on=true;this.err='';this.bad=false;this.tries=this.renew=0;hum();this.run()},
+  run(){ // 關舊的與開新的在同一瞬間
+    clearTimeout(this.tm);if(!this.on)return;
+    const old=this.rec,r=this.make();this.rec=r;this.live=false;this.res=[];this.base=0;this.skip=-1;this.en=0;this.since=performance.now();
+    if(old)try{old.abort()}catch(e){}
+    r._t=performance.now();
+    try{r.start()}catch(e){this.rec=null;this.again()}
+  },
+  again(){
+    if(!this.on||document.hidden)return;
+    if(this.tries>=6){this.bad=true;return}
+    this.tm=setTimeout(()=>this.run(),[0,300,800,1500,2500,4000][this.tries++]);
+  },
+  manual(){hum();this.err='';this.bad=false;this.tries=this.renew=0;this.on=true;this.run()},
+  make(){
+    const r=new SRC();r.lang='en-US';r.interimResults=true;r.continuous=true;r.maxAlternatives=5;
+    const mine=()=>this.rec===r;
+    r.onstart=()=>{if(mine()){this.live=true;this.since=performance.now()}};
+    r.onspeechstart=()=>{if(mine())this.cb?.sound?.()};
+    r.onerror=e=>{r._err=e.error};
+    r.onend=()=>{
+      if(!mine())return;
+      this.rec=null;this.live=false;this.res=[];this.base=0;this.skip=-1;this.en=0;
+      if(!this.on)return;
+      if(VERR[r._err]){this.on=false;this.err=VERR[r._err];this.cb?.fail?.();return}
+      if(performance.now()-r._t>4000)this.tries=0;
+      this.again();
+    };
+    r.onresult=e=>{
+      if(!mine())return;
+      this.res=[...e.results].map(x=>({t:x[0].transcript.trim(),f:x.isFinal,a:[...Array(x.length).keys()].slice(1).map(k=>x[k].transcript.trim())}));
+      if(!this.res.some(x=>x.t))return;
+      r._heard=true;this.heard=true;this.bad=false;this.tries=this.renew=0;
+      if(!this.cb){if(this.early&&this.res.length>this.en&&this.res[this.res.length-1].t){this.en=this.res.length;this.early()}return}
+      const P=[];let alts=[];
+      const s=this.skip>=0?this.res[this.skip]:null;
+      if(s&&s.t!==this.last){ // 標記當下還沒講完的那段後來變了
+        if(this.mode==='soft')P.push(s.t);
+        else if(this.mode==='drop'){if(s.t.startsWith(this.last)){const x=s.t.slice(this.last.length).trim();if(x)P.push(x)}}
+        else if(this.res.length<=this.base){this.cb.stale();return}
+      }
+      for(let k=this.base;k<this.res.length;k++){
+        let t=this.res[k].t;
+        if(ANDROID&&k>0&&this.res[k-1].t&&t.startsWith(this.res[k-1].t+' ')&&k===this.base)t=t.slice(this.res[k-1].t.length).trim();
+        if(!t)continue;
+        if(ANDROID&&P.length&&t.startsWith(P[P.length-1]))P[P.length-1]=t;else P.push(t);
+        alts=this.res[k].a;
+      }
+      if(P.length)this.cb.text(P,P.length===1?alts:[]);
+    };
+    return r;
+  },
+  /* 從現在起才算數。mode：stale＝之前就在講的不採用；soft＝同一段講完可重判；drop＝取消的那段不再採用 */
+  mark(mode){const n=this.res.length;this.base=n;this.mode=mode;this.skip=n&&!this.res[n-1].f?n-1:-1;this.last=n?this.res[n-1].t:''},
+  listen(cb){this.cb=cb;this.mark('stale');this.since=performance.now()},
+  mute(){this.cb=null},
+  close(){this.on=false;this.cb=this.early=null;this.heard=false;this.live=false;clearTimeout(this.tm);const r=this.rec;this.rec=null;this.res=[];this.base=0;this.skip=-1;if(r)try{r.abort()}catch(e){}}
+};
+/* 開了收音卻從沒聽到任何字：主動換新的，最多 3 次 */
+setInterval(()=>{
+  if(!V.on||!V.live||!V.cb||paused||document.hidden||V.rec?._heard)return;
+  if(performance.now()-V.since<8000)return;
+  if(V.renew>=3){V.bad=true;return}
+  V.renew++;V.run();
+},500);
+/* 音效全程開著（極小聲的低音），iPhone 斷線才接得回來 */
+let HUM=null;
+function hum(){const a=ctx();if(!a||HUM)return;try{const o=a.createOscillator(),g=a.createGain();o.frequency.value=40;g.gain.value=.002;o.connect(g).connect(a.destination);o.start();HUM=o}catch(e){}}
+/* 聽到的幾段 → 分數。只看聽到的字，不看答案 */
+function readParts(P,alts){
+  let v=parseScore(P.join(' '));if(v!=null)return v;
+  if(P.length>1)return parseScore(P[P.length-1]);   // 改口：取最後說的
+  for(const a of alts){v=parseScore(a);if(v!=null)return v}
+  return null;
+}
+/* ---------- 語音：作答流程 ---------- */
+const SETTLE=900,CONFIRM=1000,HOLD=2500,GRACE=800;
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const vUse=()=>voiceOn()&&G&&!G.nov;
+function hold(ms){if(!G.hold&&G.hold!==0){G.hold=T;G.spk=T}G.holdTo=ms?T+ms:null}   // 開口就停倒數
+function release(){if(G.hold==null)return;if(G.dl!=null)G.dl+=T-G.hold;G.hold=G.spk=G.holdTo=null}
+function vReset(){G.vq=G.conf=G.hold=G.spk=G.holdTo=null;G.vv=null;G.vraw='';G.miss=[]}
+function vListen(){
+  if(!vUse())return;
+  const c=G.cur,ok=()=>G&&G.cur===c&&G.ph==='input'&&!paused;
+  V.early=null;
+  if(!V.on&&!V.err)V.manual();
+  V.listen({
+    sound(){if(ok()&&G.hold==null)hold(HOLD)},
+    text(P,alts){if(!ok())return;
+      const raw=P.join(' '),v=readParts(P,alts),same=norm(raw)===norm(G.vraw);
+      if(G.conf&&(same||v===G.conf.v)){G.conf.raw=G.vraw=raw;return}   // 同一句的定稿，不重算時間
+      if(same&&G.vq!=null){G.vraw=raw;return}
+      hold();G.conf=null;G.ent='';G.vraw=raw;G.vv=v;G.vq=T+SETTLE;
+      myBox().children[0].textContent=G.vv??'…';msg('聽取中')},
+    stale(){if(!ok())return;vAgain('剛才說太早');V.run()},
+    fail(){if(ok()){release();msg(V.err)}}
+  });
+}
+function vAgain(why){V.mark('soft');G.vq=G.conf=null;release();myBox().children[0].textContent='';msg(why+'，請再說一次')}
+function vCancel(){if(!G.conf&&G.vq==null)return false;V.mark('drop');G.vq=G.conf=null;release();myBox().children[0].textContent='';return true}
+function vTick(){
+  if(!G||!vUse()||G.ph!=='input')return;
+  if(G.vq!=null&&T>=G.vq){
+    G.vq=null;
+    if(G.vv==null){G.miss.push(G.vraw);vAgain(`聽不懂「${G.vraw.slice(0,24)}」`)}
+    else{G.conf={v:G.vv,raw:G.vraw,t:T+CONFIRM};myBox().children[0].textContent=G.vv;msg(`聽到 ${G.vv===0?'no score':G.vv}`)}
+  }
+  if(G.conf&&T>=G.conf.t){const c=G.conf;G.conf=null;grade(c.v,c.raw);return}
+  if(G.holdTo!=null&&T>=G.holdTo&&G.vq==null&&!G.conf)release();
+}
+let vKey='';
+function vBar(){
+  const b=$('vbar'),use=vUse()&&G.ph!=='mic';
+  let k='off',txt='',btn='重新收音',cls='';
+  if(use){
+    if(V.err){k='err';txt='語音停用：'+V.err;cls='ng'}
+    else if(G.ph==='input'&&G.conf){k='conf';txt=`聽到「${G.conf.raw}」`;btn='取消重說';cls='hot'}
+    else if(G.ph==='input'&&G.vq!=null){k='hear';txt=`聽到「${G.vraw}」`;btn='取消重說';cls='hot'}
+    else if(V.bad||!V.on){k='bad';txt='收不到聲音，可以用按鍵';cls='ng'}
+    else if(!V.live){k='conn';txt='連接麥克風…'}
+    else if(G.ph==='input'){k='on';txt='請用英文報分';cls='on'}
+    else{k='idle';txt='收音待命'}
+  }
+  const key=k+txt;if(key===vKey)return;vKey=key;
+  b.hidden=!use;b.className='vbar '+cls;b.children[0].textContent=txt;b.children[1].textContent=btn;
+}
+$('vbar').lastElementChild.onclick=()=>{if(!G||paused)return;if(vCancel()){msg('已取消，請再說一次');return}V.manual();msg('重新收音')};
+/* 試音：收得到才開始 */
+function micTest(){
+  G.ph='mic';const n=pick([60,45,100,81,140,26]);let got=false;
+  $('vtN').textContent=n;$('vtM').textContent='請用英文說這個數字';$('vt').hidden=false;$('vtRe').focus();
+  V.open();
+  V.listen({text(P){if(got||!G||G.ph!=='mic'||paused)return;got=true;$('vtM').textContent=`聽到「${P.join(' ')}」，開始`;V.mute();after(1000,()=>{$('vt').hidden=true;next()})},
+    stale(){},fail(){}});
+  (function chk(){if(!G||G.ph!=='mic'||got)return;
+    const m=V.err?V.err+'。也可以改用按鍵':V.bad?'收不到聲音。請點「重新收音」，或關掉分頁重新打開':!V.live?'連接麥克風…（跳出詢問請按允許）':V.renew?'沒聽到，已重新收音，請再說一次':'請用英文說這個數字';
+    if($('vtM').textContent!==m)$('vtM').textContent=m;setTimeout(chk,300)})();
+}
+$('vtRe').onclick=()=>{V.manual()};
+$('vtKey').onclick=()=>{if(!G)return;G.nov=true;V.close();$('vt').hidden=true;next()};
+$('vtHome').onclick=()=>home();
+
+setInterval(()=>{const now=performance.now(),dt=now-last;last=now;
+  if(!G||paused)return;T+=dt;
+  for(const e of Qe.filter(e=>e.t<=T).sort((a,b)=>a.t-b.t)){const i=Qe.indexOf(e);if(i<0)continue;Qe.splice(i,1);e.fn();if(!G)return}
+  tick()},40);
+function start(m){
+  audio();MODE=m;Qe=[];T=0;paused=false;$('ov').hidden=true;
+  const c=m==='single'?{inf:true,gap:2}:S[m];
+  G={m,c:{...c},i:-1,log:[],ph:'',ent:'',ok:0,streak:0,lv:c.lv};
+  if(m==='battle'){G.leg=genMatch(c.lv);G.seq=G.leg.seq;G.sc=[501,501]}
+  else G.seq=m==='seq'?genTurns(c.lv,c.n):genTurns('mix',20);
+  $('pTop').innerHTML=m==='battle'?['l','r'].map((k,i)=>`<div class="sc ${k} idle" id="sc${i}"><span class="nm">${i?'橘方':'藍方'}</span><span class="pips"><i></i><i></i><i></i></span><span class="v">501</span></div>`).join(''):'<div></div><div></div><div></div>';
+  $('pTop').className=m==='battle'?'scs':'qs';
+  $('ovEnd').textContent=m==='single'?'結束並看紀錄':'結束並檢討';
+  $('pBoard').innerHTML=boardSVG([],'');
+  [$('aL'),$('aR')].forEach(e=>box(e,'','',''));
+  vReset();vKey='';padUI();show('play');
+  if(!voiceOn()){V.close();return next()}
+  $('pInfo').textContent='試音';V.heard&&V.on?next():micTest();
+}
+function box(el,cls,v,t){el.className='ans '+(el.id==='aL'?'l':'r')+' '+cls;el.children[0].textContent=v;el.children[1].textContent=t}
+const side=()=>G.m==='battle'?G.cur.side:0;
+const myBox=()=>side()?$('aR'):$('aL');
+function next(){
+  $('fixBox')?.remove();
+  G.i++;
+  if(G.i>=G.seq.length){if(G.m==='single')G.seq.push(...genTurns('mix',20));else return finish()}
+  const t=G.cur=G.seq[G.i];
+  t.ans=t.bust&&S.bust==='zero'?0:t.sum;
+  G.ph='darts';G.ent='';G.n=0;G.dl=null;vReset();V.mute();if(vUse()&&!V.on&&!V.err)V.manual();V.en=V.res.length;V.early=()=>{if(G&&G.ph==='darts'&&G.n<G.cur.ds.length)msg('等三鏢都上靶再報')};
+  const g=$('pBoard').querySelectorAll('svg>g');g.forEach(e=>e.innerHTML='');
+  topUI();
+  if(G.m==='battle')[0,1].forEach(s=>{const e=s?$('aR'):$('aL');if(s===t.side)box(e,'act','','報分')});
+  else{const p=G.log[G.log.length-1];box($('aL'),'act','','本題');
+    p?box($('aR'),p.ok?'ok':'ng',p.in==null?'—':p.in,'上一題 '+(p.ok?'✓':'✗')):box($('aR'),'','','上一題')}
+  msg(G.m==='battle'?`${t.side?'橘':'藍'}方進攻`:'看鏢');
+  t.ds.forEach((d,i)=>after(900+i*G.c.gap*1000,()=>drop(d,i)));
+}
+function drop(d,i){
+  const g=$('pBoard').querySelectorAll('svg>g'),c=COL[G.m==='battle'?G.cur.side:2],NS=(h,el)=>{const tmp=document.createElementNS('http://www.w3.org/2000/svg','g');tmp.innerHTML=h;el.appendChild(tmp.firstChild)};
+  NS(dartBody(d,c),g[0]);NS(dartTip(d,c),g[1]);SFX.hit();
+  G.n=i+1;topUI();
+  if(G.n===G.cur.ds.length){G.ph='input';G.t0=T;G.dl=G.c.inf?null:T+G.c.lim*1000;msg(vUse()?'請報分':'請輸入合計');vListen()}
+  else msg(`第 ${G.n} 鏢`);
+}
+function msg(s){$('pMsg').textContent=s}
+function topUI(){
+  const t=G.cur;
+  if(G.m==='battle'){
+    $('pInfo').innerHTML=`第 <b>${t.rd}</b> 回合`;
+    [0,1].forEach(s=>{const e=$('sc'+s);e.className='sc '+(s?'r':'l')+(s===t.side?' act':' idle');e.querySelector('.v').textContent=G.sc[s];
+      e.querySelectorAll('.pips i').forEach((p,i)=>p.className=s===t.side&&i<G.n?'f':'');e.querySelector('.pips').style.visibility=s===t.side?'':'hidden'});
+  }else{
+    const d=G.log.length,cells=G.m==='seq'?[[`${Math.min(G.i+1,G.seq.length)}/${G.seq.length}`,'題號'],[G.ok,'答對'],[d-G.ok,'答錯']]:[[d,'已答'],[G.ok,'答對'],[G.streak,'連對']];
+    $('pInfo').textContent=G.m==='seq'?'連續報分・'+LV[G.lv].name:'單題報分';
+    [...$('pTop').children].forEach((e,i)=>e.innerHTML=`<b>${cells[i][0]}</b><span>${cells[i][1]}</span>`);
+  }
+}
+function tick(){
+  vTick();if(!G)return;vBar();
+  const b=$('pBar'),s=$('pSec');
+  if(G.c.inf){b.parentNode.style.visibility='hidden';s.textContent=G.m!=='single'&&G.ph==='input'?'無時限':'';return}
+  b.parentNode.style.visibility='';
+  if(G.ph!=='input'){if(G.ph==='darts'){b.style.width='100%';b.className='';s.textContent=G.c.lim.toFixed(1)}return}
+  const l=Math.max(0,G.dl-(G.hold??T))/1000;s.textContent=l.toFixed(1);b.style.width=l/G.c.lim*100+'%';b.className=l<Math.min(3,G.c.lim/2)?'hot':'';
+  if(l<=0&&G.hold==null&&T-G.dl>=(vUse()&&V.live?GRACE:0))grade(null);
+}
+function padUI(){
+  $('pad').innerHTML=[1,2,3,4,5,6,7,8,9].map(n=>`<button data-k="${n}">${n}</button>`).join('')+'<button class="w" data-k="del">刪除</button><button data-k="0">0</button><button class="go" data-k="go">送出</button>';
+}
+function key(k){
+  if(!G||paused)return;
+  if(G.ph==='fix'){if(k==='go')next();return}
+  if(G.ph!=='darts'&&G.ph!=='input')return;
+  if(G.ph==='input'&&G.conf&&k==='go'){const c=G.conf;G.conf=null;return grade(c.v,c.raw)}
+  if(G.ph==='input'&&vCancel())msg('請報分');
+  if(k==='go'){
+    if(G.ph==='darts'){if(G.ent)msg('等三鏢都上靶再送出');return}
+    if(G.ent==='')return msg('先輸入分數，0 分請按 0');
+    return grade(+G.ent)}
+  if(k==='del')G.ent=G.ent.slice(0,-1);
+  else if(G.ent==='0')G.ent=k;
+  else if(G.ent.length<3)G.ent+=k;
+  myBox().children[0].textContent=G.ent;
+}
+$('pad').onclick=e=>{const b=e.target.closest('[data-k]');if(b)key(b.dataset.k)};
+function grade(v,raw){
+  const t=G.cur,ok=v===t.ans;G.ph='shown';V.mute();
+  G.log.push({t,in:v,ok,ans:t.ans,sec:Math.min(v==null&&!G.c.inf?G.c.lim:1e9,Math.max(0,(raw!=null&&G.spk!=null?G.spk:T)-G.t0)/1000),raw,miss:G.miss});
+  G.hold=G.spk=G.holdTo=G.vq=G.conf=null;
+  if(ok){G.ok++;G.streak++;SFX.ok()}else{G.streak=0;SFX.ng()}
+  box(myBox(),ok?'ok':'ng',v==null?'—':v,ok?'正確':v==null?'逾時':'錯誤');
+  let m=ok?'正確':v==null?'時間到':'錯誤',wait=1300;
+  if(G.m==='battle'){
+    G.sc[t.side]=t.end;wait=1700;
+    if(t.bust)m+='・爆鏢，分數不變';else if(t.fin){m+='・結鏢';wait=2600;SFX.win()}else m+=`・−${t.sum}`;
+  }
+  topUI();msg(m);
+  if(G.m==='single'&&!ok){
+    G.ph='fix';const d=t.ds;
+    const el=document.createElement('div');el.className='fix';el.id='fixBox';
+    el.innerHTML=`<div class="ttl"><span>正確組合</span><span>你的答案 ${v}</span></div><div class="cmb">${d.map((x,i)=>`${i?'<span>＋</span>':''}<div><b>${x.l}</b><span>${x.v}</span></div>`).join('')}<span>＝</span><div class="s"><b>${t.sum}</b></div></div><button class="big" style="min-height:50px;background:var(--gold);color:#17130d;border-color:var(--gold)">下一題</button>`;
+    el.querySelector('button').onclick=e=>{e.stopPropagation();next()};
+    $('pad').appendChild(el);return;
+  }
+  after(wait,next);
+}
+function pause(p){if(!G)return;if(!p&&paused&&G.ph==='input'){vCancel();V.mark('drop');release()}paused=p;$('ov').hidden=!p;if(p)$('ovGo').focus()}
+$('pause').onclick=()=>pause(true);$('ovGo').onclick=()=>{audio();if(vUse()){ctx();if(!V.on&&!V.err)V.manual()}pause(false)};
+$('ovEnd').onclick=()=>finish(true);$('ovHome').onclick=home;
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)return;if(V.on){const c=V.cb,e=V.early;V.close();if(G){V.cb=c;V.early=e}}if(G&&G.ph!=='fix')pause(true)});
+function home(){G=null;Qe=[];V.close();$('ov').hidden=$('vt').hidden=true;show('home')}
+document.addEventListener('keydown',e=>{
+  if(!G||e.metaKey||e.ctrlKey||e.altKey)return;
+  if(paused){if(e.key==='Escape')pause(false);return}
+  if(/^\d$/.test(e.key))key(e.key);
+  else if(e.key==='Backspace'){e.preventDefault();key('del')}
+  else if(e.key==='Enter'){e.preventDefault();key('go')}
+  else if(e.key==='Escape')pause(true);
+});
+
+/* ---------- 檢討 ---------- */
+let R=null,FL='bad';
+function finish(early){
+  const g=G;G=null;Qe=[];paused=false;$('ov').hidden=$('vt').hidden=true;V.mute();V.early=null;
+  if(!g.log.length)return home();
+  R=g;const n=g.log.length,ok=g.ok,avg=(g.log.reduce((a,x)=>a+x.sec,0)/n).toFixed(1);
+  let w,p;
+  if(g.m==='battle'){
+    const m=g.leg,av=s=>{const L=g.log.filter(x=>x.t.side===s),nd=L.reduce((a,x)=>a+x.t.ds.length,0);return nd?(L.reduce((a,x)=>a+(x.t.bust?0:x.t.sum),0)/nd*3).toFixed(1):'—'};
+    if(early){w='提前結束';p=`藍方剩 ${g.sc[0]}，橘方剩 ${g.sc[1]}`}
+    else if(m.winner<0){w='雙方皆未結鏢';p=`打滿 ${m.rounds} 回合，藍方剩 ${g.sc[0]}，橘方剩 ${g.sc[1]}`}
+    else{const l=g.log[n-1].t;w=`${m.winner?'橘':'藍'}方第 ${m.rounds} 回合結鏢${m.tag?'・'+m.tag:''}`;p=`${l.start} 分，以 ${l.ds.map(d=>d.l).join(' ')} 收尾`}
+    p+=`<br>三鏢平均：藍方 ${av(0)}／橘方 ${av(1)}・${LV[g.lv].name}`;
+  }else{w=ok===n?'全部答對':`答錯 ${n-ok} 題`;p=g.m==='seq'?LV[g.lv].name+(early?'・提前結束':''):'單題報分'}
+  $('rHead').innerHTML=`<div><div class="w">${w}</div><div class="p">${p}</div></div><div class="tiles"><div><b>${ok}/${n}</b><span>答對</span></div><div><b>${Math.round(ok/n*100)}%</b><span>正確率</span></div><div><b>${avg} 秒</b><span>平均作答</span></div></div>`;
+  const vn=g.log.filter(x=>x.raw!=null).length,ms=g.log.reduce((a,x)=>a+x.miss.length,0);
+  $('rVoice').hidden=!(vn||ms||V.on);$('rVoice').textContent=`語音作答 ${vn} 題，聽不懂重說 ${ms} 次。${V.on?'麥克風仍開著，回首頁就會關閉。':''}`;
+  FL=ok===n?'all':'bad';list();show('result');
+}
+function list(){
+  $('fBad').className=FL==='bad'?'on':'';$('fAll').className=FL==='all'?'on':'';
+  const L=R.log.map((x,i)=>({x,i})).filter(o=>FL==='all'||!o.x.ok);
+  $('rList').innerHTML=L.length?L.map(({x,i})=>{const t=x.t,b=R.m==='battle';
+    const sub=b?`${t.start} → ${t.end}${t.bust?'（爆鏢）':t.fin?'（結鏢）':''}`:`作答 ${x.sec.toFixed(1)} 秒`;
+    return`<div><button class="it ${x.ok?'ok':'ng'}" data-i="${i}" aria-expanded="false"><span class="n ${b?(t.side?'r':'l'):''}">${b?'R'+t.rd:i+1}</span><span class="d">${t.ds.map(d=>d.l).join(' · ')}<small>${sub}</small></span><span class="a"><b>${x.ans}</b>${x.ok?'正確':x.in==null?'逾時':'你報 '+x.in}</span></button></div>`}).join(''):'<p class="note">沒有錯題。</p>';
+}
+$('rList').onclick=e=>{const b=e.target.closest('.it');if(!b)return;const p=b.parentNode,o=p.querySelector('.exp');
+  b.setAttribute('aria-expanded',!o);
+  if(o)return o.remove();
+  const x=R.log[+b.dataset.i],t=x.t,el=document.createElement('div');el.className='exp';el.style.marginTop='6px';
+  el.innerHTML=`<div class="bdx">${boardSVG(t.ds,COL[R.m==='battle'?t.side:2])}</div><p>${t.ds.map(d=>`${d.l}（${d.v}）`).join(' ＋ ')} ＝ ${t.sum}${t.bust?`<br>爆鏢，${S.bust==='zero'?'應報 0 分':'分數不計'}`:''}<br>作答 ${x.sec.toFixed(1)} 秒${x.raw!=null?`<br>語音聽到「${esc(x.raw)}」`:''}${x.miss.length?`<br>沒聽懂：${x.miss.map(esc).join('、')}`:''}</p>`;
+  p.appendChild(el)};
+$('fBad').onclick=()=>{FL='bad';list()};$('fAll').onclick=()=>{FL='all';list()};
+$('rAgain').onclick=()=>start(R.m);$('rHome').onclick=home;
+
+/* ---------- 首頁 ---------- */
+document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>b.dataset.mode==='single'?start('single'):setup(b.dataset.mode));
+$('back').onclick=()=>show('home');$('start').onclick=()=>start(MODE);
+{let ex=place(script([['t',20],['s',5],['d',16]],501)),open=false;
+ const paint=()=>{$('heroBoard').innerHTML=boardSVG(ex.ds,COL[2])};paint();
+ $('heroAns').onclick=()=>{open=!open;
+  if(open){$('heroAns').textContent=`${ex.ds.map(d=>d.v).join(' + ')} = ${ex.sum}`}
+  else{ex=genTurns('mix',1)[0];paint();$('heroAns').textContent='看答案'}}}
+ruleUI();last=performance.now();
+
+}
+</script>
+</body>
+</html>
