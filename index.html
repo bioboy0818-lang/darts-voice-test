@@ -42,10 +42,12 @@ textarea{width:100%;height:150px;background:#0d110e;color:var(--fg);border:1px s
   <div><div class="lab">題組</div><div class="seg" id="set"></div></div>
   <div><div class="lab">收音方式</div><div class="seg" id="how"></div></div>
   <div><div class="lab">辨識口音</div><div class="seg" id="lang"></div></div>
+  <div><div class="lab">題間音效</div><div class="seg" id="snd"></div></div>
   <div><div class="lab">顯示英文唸法</div><div class="seg" id="tip"></div></div>
-  <button class="big" id="go">開始測試</button>
+  <button class="big" id="dg">收音診斷（iPhone 先做這個）</button>
+  <button id="go">開始測試</button>
   <p class="note" id="goNote">按下後瀏覽器會問麥克風權限，請選允許。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本頁不錄音、不上傳、不儲存。</p>
-  <p class="note">版本 2</p>
+  <p class="note">版本 3</p>
 </main>
 <main id="run" hidden>
   <div class="top"><span id="prog"></span><button id="stop">結束</button></div>
@@ -58,8 +60,8 @@ textarea{width:100%;height:150px;background:#0d110e;color:var(--fg);border:1px s
   <h1>測試結果</h1>
   <div class="card"><p class="verd" id="verd"></p><p class="note" id="verdN"></p></div>
   <div class="tiles" id="tiles"></div>
-  <div class="card"><h2>分組正確率</h2><table id="grp"></table></div>
-  <div class="card"><h2>沒聽對的題目</h2><table id="bad"></table></div>
+  <div class="card"><h2 id="h1b">分組正確率</h2><table id="grp"></table></div>
+  <div class="card"><h2 id="h2b">沒聽對的題目</h2><table id="bad"></table></div>
   <button class="big" id="copy">複製報告</button>
   <textarea id="rep" readonly aria-label="測試報告文字"></textarea>
   <div class="two"><button id="again">再測一次</button><button id="back">改設定</button></div>
@@ -122,12 +124,13 @@ function val(A){
 const $=id=>document.getElementById(id);
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const ua=navigator.userAgent;
-const C={set:'quick',how:'auto',lang:'en-US',tip:false};
+const C={set:'quick',how:'stay',lang:'en-US',tip:false,snd:false};
 const SETTLE=900;      // 聽到內容後安靜多久算講完（毫秒）
 function seg(id,o){const p=()=>{$(id).innerHTML=o.map(([v,l,s])=>`<button type="button" aria-pressed="${C[id]===v}" class="${C[id]===v?'on':''}" data-v="${v}">${l}${s?`<small>${s}</small>`:''}</button>`).join('')};
   $(id).onclick=e=>{const b=e.target.closest('button');if(b){C[id]=o.find(x=>String(x[0])===b.dataset.v)[0];p()}};p()}
 seg('set',[['quick','綜合 30 題','建議'],['teen','近音 27 題','13／30 類'],['rand','隨機 30 題']]);
-seg('how',[['auto','自動收音','正式功能的方式'],['tap','每題點一下']]);
+seg('how',[['stay','持續收音'],['reuse','同一個重開'],['new','每題新開'],['tap','每題點一下']]);
+seg('snd',[[false,'關'],[true,'開']]);
 seg('lang',[['en-US','美式'],['en-GB','英式']]);
 seg('tip',[[false,'不顯示'],[true,'顯示']]);
 /* 環境檢查 */
@@ -139,7 +142,7 @@ const E=[['安全連線',isSecureContext&&location.protocol!=='file:'?['可用',
 $('env').innerHTML=E.map(([a,[b,c]])=>`<div class="ck"><span>${a}</span><b class="${c}">${b}</b></div>`).join('');
 (async()=>{try{const p=await navigator.permissions.query({name:'microphone'}),el=document.createElement('div');el.className='ck';$('env').append(el);
   const paint=()=>{const[t,c]={granted:['已允許','ok'],prompt:['開始時會詢問，請按允許','wa'],denied:['已封鎖，請到網址列左側的網站設定改成允許','ng']}[p.state];el.innerHTML=`<span>麥克風權限</span><b class="${c}">${t}</b>`};p.onchange=paint;paint()}catch(e){}})();
-if(!SR){$('go').disabled=true;$('goNote').textContent='請改用 iPhone 的 Safari、Android 的 Chrome，或電腦版 Chrome 開啟。'}
+if(!SR){$('go').disabled=$('dg').disabled=true;$('goNote').textContent='請改用 iPhone 的 Safari、Android 的 Chrome，或電腦版 Chrome 開啟。'}
 
 /* 出題 */
 const shuf=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
@@ -153,100 +156,198 @@ function deck(){
   return shuf([...TY,...shuf(HT).slice(0,5),...of(n=>grp(n)==='其他 100 以上').slice(0,4),...of(n=>grp(n)==='其他 1～99').slice(0,5),0,0]);
 }
 
-/* 測試流程 */
-let Q=null,I=0,LOG=[],cur=null,rec=null,tok=0,timer=null,busy=false;
-const view=v=>{['home','run','end'].forEach(k=>$(k).hidden=k!==v);scrollTo(0,0)};
-function begin(){Q=deck();I=0;LOG=[];view('run');ask(true)}
-function ask(gesture){
-  clearTimeout(timer);kill();
-  if(I>=Q.length)return finish();
-  cur={n:Q[I],t0:performance.now(),miss:[],t1:0,done:false};
-  $('prog').textContent=`第 ${I+1} / ${Q.length} 題`;
-  $('tg').textContent=cur.n||'NO SCORE';$('tg').classList.toggle('w',!cur.n);
-  $('hint').textContent=C.tip?words(cur.n):'';
-  $('redo').disabled=!LOG.length;$('skip').disabled=false;
-  $('got').textContent='';$('raw').textContent='';
-  if(C.how==='auto'||gesture&&C.how==='auto')listen();else idle('準備好就點下面按鈕');
-}
-function idle(m,cls=''){$('mic').className='mic '+cls;$('st').textContent=m;$('talk').disabled=false;$('talk').textContent='點一下開始說'}
-function kill(){tok++;busy=false;if(rec){const r=rec;rec=null;try{r.abort()}catch(e){}}}
-function listen(tries=0){
-  kill();clearTimeout(timer);
-  const id=tok,c=cur;let r;
-  try{r=new SR()}catch(e){return idle('無法建立語音辨識：'+e.message,'bad')}
-  rec=r;r.lang=C.lang;r.interimResults=true;r.continuous=true;r.maxAlternatives=5;
-  let txt='',alts=[],quiet=null,err='';
-  const mine=()=>id===tok&&c===cur&&!c.done;
-  const settle=()=>{if(!mine())return;clearTimeout(quiet);judge(txt,alts)};
-  r.onstart=()=>{if(!mine())return;c.ts??=performance.now();$('mic').className='mic live';$('st').textContent='收音中，請說';$('talk').disabled=true;$('talk').textContent='收音中…'};
-  r.onspeechstart=()=>{if(mine()){c.t1||=performance.now();$('st').textContent='聽到聲音'}};
-  r.onresult=e=>{
-    if(!mine())return;
-    c.t1||=performance.now();
-    const P=[];alts=[];
-    for(let i=0;i<e.results.length;i++){
-      const s=e.results[i][0].transcript.trim();if(!s)continue;
-      // Android 會把累積的文字重複送一次，後段包含前段時只留後段
-      if(P.length&&s.toLowerCase().startsWith(P[P.length-1].toLowerCase()))P[P.length-1]=s;else P.push(s);
+/* ---------- 收音核心：5 種方法 ---------- */
+const METH={stay:'持續收音',reuse:'同一個收音器重開',new:'每題新開',hold:'先佔住麥克風',tap:'每題點一下'};
+let EV=[],EV0=0;
+const ev=t=>{if(EV.length<400)EV.push(`${((performance.now()-EV0)/1000).toFixed(2)} ${t}`)};
+const Eng={m:'new',rec:null,live:false,cb:null,want:false,res:null,base:0,last:'',stream:null,n:0,
+  make(){
+    const r=new SR(),id=++this.n;r.lang=C.lang;r.interimResults=true;r.continuous=true;r.maxAlternatives=5;r._id=id;
+    const mine=()=>this.rec===r;
+    ['audiostart','soundstart','speechstart','speechend','soundend','audioend','nomatch'].forEach(k=>r['on'+k]=()=>{ev(`#${id} ${k}`);if(k==='speechstart'&&mine()&&this.cb)this.cb.sound()});
+    r.onstart=()=>{ev(`#${id} start`);if(!mine())return;this.live=true;this.cb?.open()};
+    r.onerror=e=>{ev(`#${id} error ${e.error}`);r._err=e.error};
+    r.onresult=e=>{
+      const R=[...e.results];ev(`#${id} result ${R.map(x=>(x.isFinal?'F':'i')+'“'+x[0].transcript.trim()+'”').join(' ')}`);
+      if(!mine())return;this.res=R;
+      if(!this.cb)return;
+      const P=[];
+      for(let k=0;k<R.length;k++){
+        let t=R[k][0].transcript.trim();
+        if(k<this.base-1)continue;
+        if(k===this.base-1){ // 上一題留下的那段：只取後面新增的字
+          const b=this.last;if(t===b)continue;
+          if(t.toLowerCase().startsWith(b.toLowerCase()))t=t.slice(b.length).trim();else{ev('rewrite “'+b+'”→“'+t+'”')}
+        }
+        if(!t)continue;
+        if(P.length&&t.toLowerCase().startsWith(P[P.length-1].toLowerCase()))P[P.length-1]=t;else P.push(t);
+      }
+      if(!P.length)return;
+      const L=R[R.length-1],alts=[];
+      if(P.length===1&&this.base===0)for(let k=1;k<L.length;k++)alts.push(L[k].transcript.trim());
+      this.cb.text(P.join(' '),alts);
+    };
+    r.onend=()=>{
+      ev(`#${id} end`);r._on=false;if(!mine())return;
+      this.live=false;this.res=null;this.base=0;this.last='';
+      if(this.m==='stay'){ // 系統自己停掉就重開
+        if(this.cb)this.cb.end(r._err||'end');
+        return;
+      }
+      if(this.m==='reuse'){if(this.want){this.want=false;this.go(r)}else if(this.cb)this.cb.end(r._err||'end');return}
+      this.rec=null;if(this.cb)this.cb.end(r._err||'end');
+    };
+    return r;
+  },
+  go(r){r._err='';r._on=true;ev(`#${r._id} call start()`);try{r.start();return true}catch(e){ev('start 例外 '+e.name);this.cb?.end('throw '+e.name);return false}},
+  async ask(m,cb){
+    this.m=m;this.cb=cb;
+    if(m==='hold'&&!this.stream){
+      try{this.stream=await navigator.mediaDevices.getUserMedia({audio:true});ev('getUserMedia ok')}catch(e){ev('getUserMedia '+e.name)}
+      if(this.cb!==cb)return;
     }
-    txt=P.join(' ');
-    const L=e.results[e.results.length-1];
-    if(P.length===1)for(let k=1;k<L.length;k++)alts.push(L[k].transcript.trim());
-    const v=parseScore(txt);
-    $('raw').textContent=txt;$('got').textContent=v==null?'':v||'NO SCORE';
-    c.tl=performance.now();clearTimeout(quiet);quiet=setTimeout(settle,SETTLE);
+    if(m==='stay'){
+      if(this.rec&&this.live){const R=this.res||[];this.base=R.length;this.last=R.length?R[R.length-1][0].transcript.trim():'';cb.open();return}
+      this.rec??=this.make();this.base=0;this.last='';this.go(this.rec);return;
+    }
+    if(m==='reuse'){
+      this.rec??=this.make();this.base=0;
+      if(this.rec._on)this.want=true;else this.go(this.rec);return;
+    }
+    this.base=0;this.rec=this.make();this.go(this.rec);
+  },
+  done(){ // 這題收完
+    this.cb=null;
+    if(!this.rec)return;
+    if(this.m==='stay')return;
+    if(this.m==='reuse'){if(!this.rec._on)return;ev('call stop()');try{this.rec.stop()}catch(e){}return}
+    const r=this.rec;this.rec=null;this.live=false;ev('call abort()');try{r.abort()}catch(e){}
+  },
+  close(){
+    this.cb=null;this.want=false;const r=this.rec;this.rec=null;this.live=false;this.res=null;this.base=0;this.last='';
+    if(r)try{r.abort()}catch(e){}
+    if(this.stream){this.stream.getTracks().forEach(t=>t.stop());this.stream=null}
+  }};
+
+/* 題間音效（模擬正式版的叮咚聲） */
+let AC=null;
+function unlock(){if(!C.snd)return;try{AC??=new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){}}
+function ding(){if(!C.snd||!AC)return;[1319,1047].forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime+i*.2;o.frequency.value=f;g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.35);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+.4)})}
+
+/* ---------- 測試流程 ---------- */
+let Q=null,I=0,LOG=[],cur=null,timer=null,wd=null,DG=null,how='';
+const view=v=>{['home','run','end'].forEach(k=>$(k).hidden=k!==v);scrollTo(0,0)};
+function begin(){DG=null;how=C.how;EV=[];EV0=performance.now();unlock();Eng.close();Q=deck();I=0;LOG=[];view('run');ask(true)}
+function ask(gesture){
+  clearTimeout(timer);clearTimeout(wd);Eng.done();
+  if(I>=Q.length)return DG?dgNext():finish();
+  cur={n:Q[I],t0:performance.now(),miss:[],t1:0,done:false,errs:[]};
+  ev(`--- 第 ${I+1} 題 ${cur.n||'NO SCORE'}`);
+  $('prog').textContent=DG?`診斷 ${DG.k+1}/${DG.list.length}・${METH[how]}・第 ${I+1} / ${Q.length} 題`:`第 ${I+1} / ${Q.length} 題`;
+  $('tg').style.fontSize='';$('tg').textContent=cur.n||'NO SCORE';$('tg').classList.toggle('w',!cur.n);
+  $('hint').textContent=C.tip?words(cur.n):'';
+  $('redo').disabled=!!DG||!LOG.length;$('skip').disabled=false;$('skip').textContent=DG?'收不到，下一題':'跳過這題';
+  $('got').textContent='';$('raw').textContent='';
+  if(how!=='tap'||gesture&&DG&&I>0)listen();else idle('準備好就點下面按鈕');
+}
+function idle(m,cls=''){clearTimeout(wd);$('mic').className='mic '+cls;$('st').textContent=m;$('talk').disabled=false;$('talk').textContent='點一下開始說'}
+function listen(tries=0){
+  clearTimeout(timer);clearTimeout(wd);Eng.done();
+  const c=cur;let txt='',alts=[],quiet=null;
+  const mine=()=>c===cur&&!c.done;
+  const cb={
+    open(){if(!mine()||Eng.cb!==cb)return;clearTimeout(wd);c.ts??=performance.now();$('mic').className='mic live';$('st').textContent='收音中，請說';$('talk').textContent='沒反應？點一下重新收音';
+      wd=setTimeout(()=>mine()&&!txt&&fail('no-result'),9000)},
+    sound(){if(mine()){c.t1||=performance.now()}},
+    text(t,a){if(!mine())return;clearTimeout(wd);c.t1||=performance.now();c.ts??=performance.now();txt=t;alts=a;const v=parseScore(t);
+      $('raw').textContent=t;$('got').textContent=v==null?'':v||'NO SCORE';c.tl=performance.now();clearTimeout(quiet);quiet=setTimeout(()=>mine()&&judge(txt,alts),SETTLE)},
+    end(err){if(!mine())return;clearTimeout(quiet);clearTimeout(wd);if(txt)return judge(txt,alts);fail(err)}};
+  const M={'not-allowed':'沒有麥克風權限，或系統不允許自動收音','service-not-allowed':'系統不允許語音服務（請確認已開啟聽寫）','audio-capture':'找不到麥克風','network':'連不上語音服務，請檢查網路','language-not-supported':'不支援這個口音，請回設定改另一種','no-start':'收音沒有啟動'};
+  const fail=err=>{
+    c.errs.push(err);ev('失敗 '+err);Eng.done();if(how==='stay'||how==='reuse')Eng.close();
+    if(DG)return dgFail(err);
+    if(!M[err]&&how!=='tap'&&tries<1){$('st').textContent='沒聽到，請再說一次';timer=setTimeout(()=>mine()&&listen(tries+1),300);return}
+    idle((M[err]||'沒聽到聲音')+'，請點下面按鈕再說一次',M[err]?'bad':'');
   };
-  r.onerror=e=>{err=e.error};
-  r.onend=()=>{
-    if(!mine())return;
-    clearTimeout(quiet);rec=null;
-    if(txt)return judge(txt,alts);
-    const M={'not-allowed':'沒有麥克風權限，或系統不允許自動收音。請點下面按鈕再試，仍不行就到瀏覽器設定允許麥克風','service-not-allowed':'這個瀏覽器不允許語音服務（iPhone 請確認已開啟 Siri 或聽寫）','audio-capture':'找不到麥克風','network':'連不上語音服務，請檢查網路','language-not-supported':'不支援這個口音，請回設定改另一種'};
-    (c.errs??=[]).push(err||'end');
-    if(M[err])return idle(M[err],'bad');
-    if(C.how==='auto'&&tries<2){$('st').textContent='沒聽到，請再說一次';timer=setTimeout(()=>mine()&&listen(tries+1),250);return}
-    idle('沒聽到聲音，點下面按鈕再說一次');
-  };
-  $('mic').className='mic';$('st').textContent='啟動麥克風…';$('talk').disabled=true;$('got').textContent='';$('raw').textContent='';
-  try{r.start()}catch(e){rec=null;idle('無法自動開始，請點下面按鈕')}
+  $('mic').className='mic';$('st').textContent='啟動麥克風…';$('talk').disabled=false;$('talk').textContent='沒反應？點一下重新收音';$('got').textContent='';$('raw').textContent='';
+  wd=setTimeout(()=>mine()&&fail('no-start'),!LOG.length?15000:3500); // 第一題要留時間按允許
+  Eng.ask(how,cb);
 }
 function judge(txt,alts){
-  const c=cur;let v=parseScore(txt),used=txt;
+  const c=cur;let v=parseScore(txt),used=txt;clearTimeout(wd);
   if(v==null)for(const a of alts){v=parseScore(a);if(v!=null){used=a;break}}   // 依辨識排名取第一個能解讀的
   const now=performance.now();
-  kill();
-  if(v==null){
+  Eng.done();
+  if(v==null&&!DG){
     c.miss.push(txt);$('redo').disabled=false;
     $('got').textContent='';$('raw').textContent='聽到：'+txt;$('mic').className='mic bad';$('st').textContent='聽不懂，請再說一次';
-    if(C.how==='auto'&&c.miss.length<3)timer=setTimeout(()=>cur===c&&listen(),900);else idle('聽不懂，點下面按鈕再說一次','bad');
+    if(how!=='tap'&&c.miss.length<3)timer=setTimeout(()=>cur===c&&listen(),900);else idle('聽不懂，點下面按鈕再說一次','bad');
     return;
   }
   c.done=true;
   const ok=v===c.n;
-  LOG.push({n:c.n,v,raw:used,first:txt,miss:c.miss,ok,ok1:ok&&!c.miss.length,alt:alts.some(a=>parseScore(a)===c.n),
-    lat:c.t1?now-c.t1:null,tail:c.tl?now-c.tl:null,open:c.ts?c.ts-c.t0:null,errs:c.errs||[]});
-  $('got').textContent=v||'NO SCORE';$('raw').textContent='聽到：'+used;
-  $('mic').className='mic '+(ok?'good':'bad');$('st').textContent=ok?'正確':`聽成 ${v||'NO SCORE'}`;
-  $('talk').disabled=true;$('talk').textContent='下一題…';$('redo').disabled=false;$('skip').disabled=true;
-  I++;timer=setTimeout(()=>ask(),ok?900:2200);
+  LOG.push({n:c.n,v,raw:used,miss:c.miss,ok,ok1:ok&&!c.miss.length,alt:alts.some(a=>parseScore(a)===c.n),
+    lat:c.t1?now-c.t1:null,open:c.ts?c.ts-c.t0:null,errs:c.errs,got:true});
+  $('got').textContent=v==null?'':v||'NO SCORE';$('raw').textContent='聽到：'+used;
+  $('mic').className='mic '+(ok?'good':'bad');$('st').textContent=ok?'正確':DG?'有收到聲音':`聽成 ${v||'NO SCORE'}`;
+  $('talk').disabled=true;$('talk').textContent='下一題…';$('redo').disabled=!!DG;$('skip').disabled=true;
+  ding();
+  I++;timer=setTimeout(()=>ask(),ok||DG?900:2200);
 }
-$('go').onclick=begin;$('again').onclick=begin;$('back').onclick=()=>view('home');
-$('talk').onclick=()=>{if(cur&&!cur.done)listen()};
+$('go').onclick=begin;$('again').onclick=()=>DG?dgStart():begin();$('back').onclick=()=>{DG=null;view('home')};
+$('talk').onclick=()=>{if(DG&&DG.wait){DG.wait=false;unlock();return ask(how!=='tap'?true:false)}
+  if(cur&&!cur.done){ev('點按收音');if(how==='stay'||how==='reuse')Eng.close();listen()}};
 $('redo').onclick=()=>{ // 這題已有「聽不懂」就重來這題，否則取消上一筆重唸
+  if(DG)return;
   if(cur&&!cur.done&&cur.miss.length)return ask(true);
   if(!LOG.length)return;LOG.pop();I--;
   ask(true)};
-$('skip').onclick=()=>{if(!cur||cur.done)return;cur.done=true;
-  LOG.push({n:cur.n,v:null,raw:cur.miss.join(' / ')||'（沒聽到）',miss:cur.miss,ok:false,ok1:false,alt:false,lat:null,tail:null,open:null,errs:cur.errs||[],skip:true});I++;ask(true)};
-$('stop').onclick=()=>finish();
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&!$('run').hidden&&cur&&!cur.done){clearTimeout(timer);kill();idle('已暫停，點下面按鈕繼續')}});
+$('skip').onclick=()=>{if(DG&&DG.wait)return;if(!cur||cur.done)return;if(DG)return dgFail('使用者略過');cur.done=true;
+  LOG.push({n:cur.n,v:null,raw:cur.miss.join(' / ')||'（沒聽到）',miss:cur.miss,ok:false,ok1:false,alt:false,lat:null,open:null,errs:cur.errs,skip:true});I++;ask(true)};
+$('stop').onclick=()=>DG?dgEnd():finish();
+document.addEventListener('visibilitychange',()=>{ev('頁面 '+(document.hidden?'隱藏':'顯示'));if(document.hidden&&!$('run').hidden&&cur&&!cur.done&&!DG){clearTimeout(timer);Eng.close();idle('已暫停，點下面按鈕繼續')}});
+
+/* ---------- 收音診斷 ---------- */
+const DQ=3;
+function dgStart(){DG={list:['stay','reuse','new','hold','tap'],k:-1,res:[],wait:false};EV=[];EV0=performance.now();view('run');dgNext()}
+function dgNext(){
+  clearTimeout(timer);clearTimeout(wd);Eng.close();
+  if(DG.k>=0)DG.res.push({m:how,log:LOG});
+  DG.k++;LOG=[];
+  if(DG.k>=DG.list.length)return dgEnd();
+  how=DG.list[DG.k];Q=shuf([26,45,60,81,100,140,41,85,57,96]).slice(0,DQ);I=0;cur=null;DG.wait=true;
+  ev(`===== ${METH[how]}`);
+  $('prog').textContent=`診斷 ${DG.k+1} / ${DG.list.length}`;$('tg').textContent=METH[how];$('tg').classList.add('w');$('tg').style.fontSize='38px';
+  $('hint').textContent=how==='tap'?'共 3 題，每題都要點一下再說':'共 3 題，只點這一次，之後直接說';
+  $('got').textContent='';$('raw').textContent='';$('redo').disabled=true;$('skip').disabled=true;
+  idle('看到數字就用英文唸');$('talk').textContent='開始這個方法';
+}
+function dgFail(err){if(cur.done)return;cur.done=true;clearTimeout(wd);Eng.done();LOG.push({n:cur.n,got:false,err,open:cur.ts?cur.ts-cur.t0:null});
+  $('mic').className='mic bad';$('st').textContent='這題沒收到（'+err+'）';I++;timer=setTimeout(()=>ask(),900)}
+function dgEnd(){
+  clearTimeout(timer);clearTimeout(wd);Eng.close();cur=null;
+  if(DG.k<DG.list.length&&LOG.length)DG.res.push({m:how,log:LOG});
+  if(!DG.res.length){DG=null;return view('home')}
+  const R=DG.res.map(x=>({m:x.m,g:x.log.filter(y=>y.got).length,n:x.log.length,ok:x.log.filter(y=>y.ok).length,log:x.log}));
+  const best=R.filter(x=>x.m!=='tap'&&x.g===DQ&&x.ok>=2);
+  $('verd').textContent=best.length?`可以自動收音：${METH[best[0].m]}`:R.some(x=>x.m==='tap'&&x.g===DQ)?'只能每題點一下':'沒有一種方法完全成功';
+  $('verd').className='verd '+(best.length?'ok':'wa');$('verdN').textContent='每種方法測 3 題，3 題都收到、至少聽對 2 題才算成功。';
+  $('tiles').innerHTML='';
+  $('grp').innerHTML='<tr><th>方法</th><th>收到</th><th>聽對</th></tr>'+R.map(x=>`<tr><td>${METH[x.m]}</td><td class="${x.g===DQ?'ok':'ng'}">${x.g}/${DQ}</td><td>${x.ok}</td></tr>`).join('');
+  $('bad').innerHTML=R.map(x=>x.log.map((y,i)=>`<tr><td>${METH[x.m]} ${i+1}</td><td>${nm(y.n)}</td><td>${y.got?'聽到 '+esc(y.raw):'沒收到：'+esc(y.err)}</td></tr>`).join('')).join('');
+  $('h1b').textContent='各方法';$('h2b').textContent='每題紀錄';
+  $('rep').value=['收音診斷報告（版本 3）',ua,`口音 ${C.lang}｜音效 ${C.snd?'開':'關'}｜audioSession ${navigator.audioSession?.type||'無'}`,
+    ...R.map(x=>`${METH[x.m]}：收到 ${x.g}/${DQ}，聽對 ${x.ok}｜`+x.log.map(y=>`${nm(y.n)}→${y.got?y.raw:'×'+y.err}${y.open!=null?'('+(y.open/1000).toFixed(1)+'s)':''}`).join('，')),'事件：',...EV].join('\n');
+  view('end');
+}
+$('dg').onclick=dgStart;
 
 /* 結果 */
 const pc=(a,b)=>b?Math.round(a/b*100)+'%':'—',med=a=>{a=a.filter(x=>x!=null).sort((x,y)=>x-y);return a.length?a[a.length>>1]:null},sec=x=>x==null?'—':(x/1000).toFixed(1)+' 秒';
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const nm=n=>n==null?'跳過':n||'NO SCORE';
 function finish(){
-  clearTimeout(timer);kill();cur=null;
+  clearTimeout(timer);clearTimeout(wd);Eng.close();cur=null;$('h1b').textContent='分組正確率';$('h2b').textContent='沒聽對的題目';
   if(!LOG.length)return view('home');
   const n=LOG.length,k1=LOG.filter(x=>x.ok1).length,wr=LOG.filter(x=>!x.ok&&x.v!=null).length,un=LOG.filter(x=>x.miss.length||x.skip).length,r=k1/n;
   const lat=med(LOG.map(x=>x.lat)),open=med(LOG.map(x=>x.open));
@@ -258,11 +359,11 @@ function finish(){
   $('grp').innerHTML='<tr><th>分數類型</th><th>題數</th><th>一次聽對</th><th>聽錯</th></tr>'+Object.entries(G).map(([a,g])=>`<tr><td>${a}</td><td>${g[0]}</td><td>${pc(g[1],g[0])}</td><td>${g[2]}</td></tr>`).join('');
   const B=LOG.filter(x=>!x.ok1);
   $('bad').innerHTML=B.length?'<tr><th>題目</th><th>結果</th><th>聽到的文字</th></tr>'+B.map(x=>`<tr><td>${nm(x.n)}</td><td class="${x.ok?'wa':'ng'}">${x.ok?'重說後聽對':nm(x.v)}</td><td>${esc([...x.miss,x.skip?'':x.raw].filter(Boolean).join(' → ')||x.raw)}</td></tr>`).join(''):'<tr><td>全部一次聽對。</td></tr>';
-  $('rep').value=['語音報分測試報告（版本 2）',`題組 ${C.set}｜收音 ${C.how}｜口音 ${C.lang}｜${/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':'電腦'}`,ua,
+  $('rep').value=['語音報分測試報告（版本 3）',`題組 ${C.set}｜收音 ${METH[how]}｜音效 ${C.snd?'開':'關'}｜口音 ${C.lang}｜${/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':'電腦'}`,ua,
     `一次聽對 ${k1}/${n}（${pc(k1,n)}）｜聽錯 ${wr}｜聽不懂或跳過 ${un}｜開口到出結果 ${sec(lat)}｜出題到收音 ${sec(open)}`,
     ...Object.entries(G).map(([a,g])=>`${a}：${g[1]}/${g[0]}，聽錯 ${g[2]}`),
     '沒聽對：',...B.map(x=>`${nm(x.n)} → ${x.ok?'重說後聽對':nm(x.v)}｜${[...x.miss,x.raw].join(' → ')}${x.alt?'｜候選中有正解':''}`),
-    '錯誤代碼：'+([...new Set(LOG.flatMap(x=>x.errs))].join('、')||'無')].join('\n');
+    '錯誤代碼：'+([...new Set(LOG.flatMap(x=>x.errs))].join('、')||'無'),'事件（最後 60 筆）：',...EV.slice(-60)].join('\n');
   view('end');
 }
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('rep').value);$('copy').textContent='已複製，貼給我即可'}catch(e){$('rep').focus();$('rep').select();$('copy').textContent='請長按下方文字複製'}setTimeout(()=>$('copy').textContent='複製報告',2500)};
