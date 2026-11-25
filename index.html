@@ -30,6 +30,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}button:disabled{o
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tiles div{border:1px solid var(--line);border-radius:12px;padding:8px 4px;text-align:center}.tiles b{display:block;font:800 30px/1.1 var(--num);color:#fff}.tiles span{font-size:13px;color:var(--mut)}
 .verd{font-size:20px;font-weight:800;text-wrap:balance}
 table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}th{font-weight:600;color:var(--mut);font-size:13px}
+#bad td:nth-child(2){white-space:nowrap}
 textarea{width:100%;height:150px;background:#0d110e;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px;font:13px/1.4 ui-monospace,monospace}
 [hidden]{display:none!important}
 </style>
@@ -44,10 +45,12 @@ textarea{width:100%;height:150px;background:#0d110e;color:var(--fg);border:1px s
   <div><div class="lab">辨識口音</div><div class="seg" id="lang"></div></div>
   <div><div class="lab">題間音效</div><div class="seg" id="snd"></div></div>
   <div><div class="lab">顯示英文唸法</div><div class="seg" id="tip"></div></div>
-  <button class="big" id="dg">收音診斷（iPhone 先做這個）</button>
-  <button id="go">開始測試</button>
+  <button class="big" id="sk">1. 長時間測試（約 4 分鐘）</button>
+  <button class="big" id="rc">2. 斷線恢復測試（約 3 分鐘）</button>
+  <button id="dg" hidden>收音診斷</button>
+  <button id="go">一般測試</button>
   <p class="note" id="goNote">按下後瀏覽器會問麥克風權限，請選允許。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本頁不錄音、不上傳、不儲存。</p>
-  <p class="note">版本 3</p>
+  <p class="note">版本 4</p>
 </main>
 <main id="run" hidden>
   <div class="top"><span id="prog"></span><button id="stop">結束</button></div>
@@ -60,6 +63,7 @@ textarea{width:100%;height:150px;background:#0d110e;color:var(--fg);border:1px s
   <h1>測試結果</h1>
   <div class="card"><p class="verd" id="verd"></p><p class="note" id="verdN"></p></div>
   <div class="tiles" id="tiles"></div>
+  <div class="card" id="vol" hidden><h2>測試中的叮咚聲聽起來如何？</h2><div class="seg" id="volS"></div></div>
   <div class="card"><h2 id="h1b">分組正確率</h2><table id="grp"></table></div>
   <div class="card"><h2 id="h2b">沒聽對的題目</h2><table id="bad"></table></div>
   <button class="big" id="copy">複製報告</button>
@@ -125,6 +129,7 @@ const $=id=>document.getElementById(id);
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const ua=navigator.userAgent;
 const C={set:'quick',how:'stay',lang:'en-US',tip:false,snd:false};
+const QUIET=75;
 const SETTLE=900;      // 聽到內容後安靜多久算講完（毫秒）
 function seg(id,o){const p=()=>{$(id).innerHTML=o.map(([v,l,s])=>`<button type="button" aria-pressed="${C[id]===v}" class="${C[id]===v?'on':''}" data-v="${v}">${l}${s?`<small>${s}</small>`:''}</button>`).join('')};
   $(id).onclick=e=>{const b=e.target.closest('button');if(b){C[id]=o.find(x=>String(x[0])===b.dataset.v)[0];p()}};p()}
@@ -142,7 +147,7 @@ const E=[['安全連線',isSecureContext&&location.protocol!=='file:'?['可用',
 $('env').innerHTML=E.map(([a,[b,c]])=>`<div class="ck"><span>${a}</span><b class="${c}">${b}</b></div>`).join('');
 (async()=>{try{const p=await navigator.permissions.query({name:'microphone'}),el=document.createElement('div');el.className='ck';$('env').append(el);
   const paint=()=>{const[t,c]={granted:['已允許','ok'],prompt:['開始時會詢問，請按允許','wa'],denied:['已封鎖，請到網址列左側的網站設定改成允許','ng']}[p.state];el.innerHTML=`<span>麥克風權限</span><b class="${c}">${t}</b>`};p.onchange=paint;paint()}catch(e){}})();
-if(!SR){$('go').disabled=$('dg').disabled=true;$('goNote').textContent='請改用 iPhone 的 Safari、Android 的 Chrome，或電腦版 Chrome 開啟。'}
+if(!SR){['go','dg','sk','rc'].forEach(k=>$(k).disabled=true);$('goNote').textContent='請改用 iPhone 的 Safari、Android 的 Chrome，或電腦版 Chrome 開啟。'}
 
 /* 出題 */
 const shuf=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
@@ -158,8 +163,8 @@ function deck(){
 
 /* ---------- 收音核心：5 種方法 ---------- */
 const METH={stay:'持續收音',reuse:'同一個收音器重開',new:'每題新開',hold:'先佔住麥克風',tap:'每題點一下'};
-let EV=[],EV0=0;
-const ev=t=>{if(EV.length<400)EV.push(`${((performance.now()-EV0)/1000).toFixed(2)} ${t}`)};
+let EV=[],EV0=0,DISC=[],SK=null;
+const ev=t=>{if(EV.length<900)EV.push(`${((performance.now()-EV0)/1000).toFixed(2)} ${t}`)};
 const Eng={m:'new',rec:null,live:false,cb:null,want:false,res:null,base:0,last:'',stream:null,n:0,
   make(){
     const r=new SR(),id=++this.n;r.lang=C.lang;r.interimResults=true;r.continuous=true;r.maxAlternatives=5;r._id=id;
@@ -168,7 +173,7 @@ const Eng={m:'new',rec:null,live:false,cb:null,want:false,res:null,base:0,last:'
     r.onstart=()=>{ev(`#${id} start`);if(!mine())return;this.live=true;this.cb?.open()};
     r.onerror=e=>{ev(`#${id} error ${e.error}`);r._err=e.error};
     r.onresult=e=>{
-      const R=[...e.results];ev(`#${id} result ${R.map(x=>(x.isFinal?'F':'i')+'“'+x[0].transcript.trim()+'”').join(' ')}`);
+      const R=[...e.results];ev(`#${id} result n=${R.length} ${R.slice(-3).map(x=>(x.isFinal?'F':'i')+'“'+x[0].transcript.trim()+'”').join(' ')}`);
       if(!mine())return;this.res=R;
       if(!this.cb)return;
       const P=[];
@@ -190,7 +195,8 @@ const Eng={m:'new',rec:null,live:false,cb:null,want:false,res:null,base:0,last:'
     r.onend=()=>{
       ev(`#${id} end`);r._on=false;if(!mine())return;
       this.live=false;this.res=null;this.base=0;this.last='';
-      if(this.m==='stay'){ // 系統自己停掉就重開
+      if(this.m==='stay'){ // 系統自己停掉
+        this.rec=null;DISC.push({t:(performance.now()-EV0)/1000,err:r._err||'end',at:SK?.quiet?'安靜等待中':`第 ${I+1} 題`});
         if(this.cb)this.cb.end(r._err||'end');
         return;
       }
@@ -231,16 +237,18 @@ const Eng={m:'new',rec:null,live:false,cb:null,want:false,res:null,base:0,last:'
 
 /* 題間音效（模擬正式版的叮咚聲） */
 let AC=null;
-function unlock(){if(!C.snd)return;try{AC??=new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){}}
-function ding(){if(!C.snd||!AC)return;[1319,1047].forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime+i*.2;o.frequency.value=f;g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.35);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+.4)})}
+const sndOn=()=>SK?SK.snd:C.snd;
+function unlock(){if(!C.snd&&!SK)return;try{AC??=new(window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){}}
+function ding(){if(!sndOn()||!AC)return;ev('音效 '+AC.state);if(AC.state!=='running')AC.resume();[1319,1047].forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime+i*.2;o.frequency.value=f;g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.35);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+.4)})}
 
 /* ---------- 測試流程 ---------- */
 let Q=null,I=0,LOG=[],cur=null,timer=null,wd=null,DG=null,how='';
 const view=v=>{['home','run','end'].forEach(k=>$(k).hidden=k!==v);scrollTo(0,0)};
-function begin(){DG=null;how=C.how;EV=[];EV0=performance.now();unlock();Eng.close();Q=deck();I=0;LOG=[];view('run');ask(true)}
+function begin(soak){DG=null;RC=null;SK=soak===true?{snd:false,quiet:false,did:false,vol:''}:null;how=SK?'stay':C.how;DISC=[];EV=[];EV0=performance.now();unlock();Eng.close();Q=SK?soakDeck():deck();I=0;LOG=[];view('run');ask(true)}
 function ask(gesture){
   clearTimeout(timer);clearTimeout(wd);Eng.done();
   if(I>=Q.length)return DG?dgNext():finish();
+  if(SK){SK.snd=I>=10;if(I===20&&!SK.did)return quietPhase()}
   cur={n:Q[I],t0:performance.now(),miss:[],t1:0,done:false,errs:[]};
   ev(`--- 第 ${I+1} 題 ${cur.n||'NO SCORE'}`);
   $('prog').textContent=DG?`診斷 ${DG.k+1}/${DG.list.length}・${METH[how]}・第 ${I+1} / ${Q.length} 題`:`第 ${I+1} / ${Q.length} 題`;
@@ -250,6 +258,15 @@ function ask(gesture){
   $('got').textContent='';$('raw').textContent='';
   if(how!=='tap'||gesture&&DG&&I>0)listen();else idle('準備好就點下面按鈕');
 }
+function soakDeck(){const d=C.set;C.set='quick';const q=deck();C.set=d;return q}
+function quietPhase(){ // 故意安靜 75 秒，看系統會不會把收音關掉
+  SK.did=SK.quiet=true;cur=null;ev('===== 安靜 75 秒');
+  $('prog').textContent='安靜等待';$('tg').classList.add('w');$('hint').textContent='這段請不要說話，等倒數結束';
+  $('got').textContent='';$('raw').textContent='';$('mic').className='mic';$('st').textContent='測試長時間沒人說話';$('talk').disabled=true;$('talk').textContent='請等待';$('redo').disabled=$('skip').disabled=true;
+  const end=performance.now()+QUIET*1000;
+  (function tick(){if(!SK||!SK.quiet)return;const l=Math.ceil((end-performance.now())/1000);$('tg').textContent=Math.max(0,l)+' 秒';
+    if(l>0)timer=setTimeout(tick,250);else{SK.quiet=false;SK.alive=Eng.live;ev('安靜結束 收音'+(Eng.live?'還在':'已停'));ask(false)}})();
+}
 function idle(m,cls=''){clearTimeout(wd);$('mic').className='mic '+cls;$('st').textContent=m;$('talk').disabled=false;$('talk').textContent='點一下開始說'}
 function listen(tries=0){
   clearTimeout(timer);clearTimeout(wd);Eng.done();
@@ -257,7 +274,8 @@ function listen(tries=0){
   const mine=()=>c===cur&&!c.done;
   const cb={
     open(){if(!mine()||Eng.cb!==cb)return;clearTimeout(wd);c.ts??=performance.now();$('mic').className='mic live';$('st').textContent='收音中，請說';$('talk').textContent='沒反應？點一下重新收音';
-      wd=setTimeout(()=>mine()&&!txt&&fail('no-result'),9000)},
+      wd=setTimeout(()=>{if(!mine()||txt)return;if(how==='stay'&&!DG){ev('9 秒沒有聲音，保持收音');$('st').textContent=DISC.length?'收音斷線後救不回來，請按右上角「結束」並複製報告':'還在收音，請說；一直沒反應再點下面按鈕';$('talk').disabled=false;return}fail('no-result')},9000);
+      if(how==='stay'&&!DG)$('talk').disabled=true},
     sound(){if(mine()){c.t1||=performance.now()}},
     text(t,a){if(!mine())return;clearTimeout(wd);c.t1||=performance.now();c.ts??=performance.now();txt=t;alts=a;const v=parseScore(t);
       $('raw').textContent=t;$('got').textContent=v==null?'':v||'NO SCORE';c.tl=performance.now();clearTimeout(quiet);quiet=setTimeout(()=>mine()&&judge(txt,alts),SETTLE)},
@@ -294,22 +312,22 @@ function judge(txt,alts){
   ding();
   I++;timer=setTimeout(()=>ask(),ok||DG?900:2200);
 }
-$('go').onclick=begin;$('again').onclick=()=>DG?dgStart():begin();$('back').onclick=()=>{DG=null;view('home')};
-$('talk').onclick=()=>{if(DG&&DG.wait){DG.wait=false;unlock();return ask(how!=='tap'?true:false)}
+$('go').onclick=()=>begin();$('sk').onclick=()=>begin(true);$('again').onclick=()=>RC?rcStart():DG?dgStart():begin(!!SK);$('back').onclick=()=>{DG=null;SK=null;RC=null;view('home')};
+$('talk').onclick=()=>{if(RC)return rcTap();if(DG&&DG.wait){DG.wait=false;unlock();return ask(how!=='tap'?true:false)}
   if(cur&&!cur.done){ev('點按收音');if(how==='stay'||how==='reuse')Eng.close();listen()}};
-$('redo').onclick=()=>{ // 這題已有「聽不懂」就重來這題，否則取消上一筆重唸
+$('redo').onclick=()=>{if(RC)return; // 這題已有「聽不懂」就重來這題，否則取消上一筆重唸
   if(DG)return;
   if(cur&&!cur.done&&cur.miss.length)return ask(true);
   if(!LOG.length)return;LOG.pop();I--;
   ask(true)};
-$('skip').onclick=()=>{if(DG&&DG.wait)return;if(!cur||cur.done)return;if(DG)return dgFail('使用者略過');cur.done=true;
+$('skip').onclick=()=>{if(RC)return rcSkip&&rcSkip();if(DG&&DG.wait)return;if(!cur||cur.done)return;if(DG)return dgFail('使用者略過');cur.done=true;
   LOG.push({n:cur.n,v:null,raw:cur.miss.join(' / ')||'（沒聽到）',miss:cur.miss,ok:false,ok1:false,alt:false,lat:null,open:null,errs:cur.errs,skip:true});I++;ask(true)};
-$('stop').onclick=()=>DG?dgEnd():finish();
+$('stop').onclick=()=>{if(RC)return rcEnd();if(SK)SK.quiet=false;DG?dgEnd():finish()};
 document.addEventListener('visibilitychange',()=>{ev('頁面 '+(document.hidden?'隱藏':'顯示'));if(document.hidden&&!$('run').hidden&&cur&&!cur.done&&!DG){clearTimeout(timer);Eng.close();idle('已暫停，點下面按鈕繼續')}});
 
 /* ---------- 收音診斷 ---------- */
 const DQ=3;
-function dgStart(){DG={list:['stay','reuse','new','hold','tap'],k:-1,res:[],wait:false};EV=[];EV0=performance.now();view('run');dgNext()}
+function dgStart(){SK=null;DISC=[];DG={list:['stay','reuse','new','hold','tap'],k:-1,res:[],wait:false};EV=[];EV0=performance.now();view('run');dgNext()}
 function dgNext(){
   clearTimeout(timer);clearTimeout(wd);Eng.close();
   if(DG.k>=0)DG.res.push({m:how,log:LOG});
@@ -336,11 +354,100 @@ function dgEnd(){
   $('grp').innerHTML='<tr><th>方法</th><th>收到</th><th>聽對</th></tr>'+R.map(x=>`<tr><td>${METH[x.m]}</td><td class="${x.g===DQ?'ok':'ng'}">${x.g}/${DQ}</td><td>${x.ok}</td></tr>`).join('');
   $('bad').innerHTML=R.map(x=>x.log.map((y,i)=>`<tr><td>${METH[x.m]} ${i+1}</td><td>${nm(y.n)}</td><td>${y.got?'聽到 '+esc(y.raw):'沒收到：'+esc(y.err)}</td></tr>`).join('')).join('');
   $('h1b').textContent='各方法';$('h2b').textContent='每題紀錄';
-  $('rep').value=['收音診斷報告（版本 3）',ua,`口音 ${C.lang}｜音效 ${C.snd?'開':'關'}｜audioSession ${navigator.audioSession?.type||'無'}`,
+  $('rep').value=['收音診斷報告（版本 4）',ua,`口音 ${C.lang}｜音效 ${C.snd?'開':'關'}｜audioSession ${navigator.audioSession?.type||'無'}`,
     ...R.map(x=>`${METH[x.m]}：收到 ${x.g}/${DQ}，聽對 ${x.ok}｜`+x.log.map(y=>`${nm(y.n)}→${y.got?y.raw:'×'+y.err}${y.open!=null?'('+(y.open/1000).toFixed(1)+'s)':''}`).join('，')),'事件：',...EV].join('\n');
-  view('end');
+  view('end');$('vol').hidden=true;
 }
 $('dg').onclick=dgStart;
+
+/* ---------- 斷線恢復測試：每種方法都在剛載入的頁面開始，互不影響 ---------- */
+const RM={once:'短收音，結束後自動重開',tap:'短收音，每題點一下',iframe:'每題換隱藏框架',playrec:'設定為錄放音模式',gum:'重新取得麥克風再重開',reload:'重新整理頁面後直接收音'};
+let RC=null,rcSkip=null,rcGo=null;
+const rcSave=()=>{try{sessionStorage.setItem('rc',JSON.stringify(RC))}catch(e){}};
+const rcClear=()=>{try{sessionStorage.removeItem('rc')}catch(e){}};
+const zz=ms=>new Promise(r=>setTimeout(r,ms));
+function rcStart(){DG=null;SK=null;Eng.close();RC={k:0,res:[],ev:[],left:null};rcSave();location.reload()}
+$('rc').onclick=rcStart;
+function rcShow(m,btn,cls=''){$('mic').className='mic '+cls;$('st').textContent=m;$('talk').textContent=btn||'請說';$('talk').disabled=!btn}
+function rcNum(n,i){$('tg').style.fontSize='';$('tg').classList.remove('w');$('tg').textContent=n;$('prog').textContent=`恢復 ${RC.k+1}/${Object.keys(RM).length}・第 ${i+1} / 3 題`;$('got').textContent='';$('raw').textContent=''}
+const rcWait=(m,btn)=>new Promise(r=>{rcShow(m,btn);rcGo=r});
+function rcTap(){const g=rcGo;rcGo=null;if(g)g()}
+function rcBoot(){
+  let d=null;try{d=JSON.parse(sessionStorage.getItem('rc'))}catch(e){}
+  if(!d||!SR)return;
+  RC=d;EV=[];EV0=performance.now();view('run');$('redo').disabled=true;$('skip').disabled=true;$('skip').textContent='收不到，下一題';
+  rcRun();
+}
+function rcCap(m,n,i){ // 收一題
+  return new Promise(res=>{
+    let Ctor=SR,fr=null;
+    if(m==='iframe'){fr=document.createElement('iframe');fr.allow='microphone';fr.style.cssText='position:absolute;width:1px;height:1px;opacity:0;border:0';document.body.append(fr);Ctor=fr.contentWindow.SpeechRecognition||fr.contentWindow.webkitSpeechRecognition||SR;ev('iframe '+(Ctor===SR?'用主頁':'獨立'))}
+    if(m==='playrec')try{navigator.audioSession.type='play-and-record';ev('audioSession '+navigator.audioSession.type)}catch(e){ev('audioSession 無法設定')}
+    const r=new Ctor();r.lang=C.lang;r.interimResults=true;r.continuous=m!=='once'&&m!=='tap';
+    let txt='',fin=false,q=null,started=null,ended=false,endCb=null;const t0=performance.now();
+    const w=setTimeout(()=>out('沒收到'),i===0?20000:10000);
+    const out=async err=>{
+      if(fin)return;fin=true;clearTimeout(w);clearTimeout(q);rcSkip=null;$('skip').disabled=true;
+      if(!ended){ev('call stop()');try{r.stop()}catch(e){}await Promise.race([new Promise(z=>endCb=z),zz(2500)])}
+      if(!ended){ev('call abort()');try{r.abort()}catch(e){}await zz(300)}
+      if(fr)fr.remove();
+      res({n,got:!!txt,raw:txt,ok:parseScore(txt)===n,err,open:started})};
+    ['audiostart','speechstart','speechend','audioend'].forEach(k=>r['on'+k]=()=>ev(`${i+1} ${k}`));
+    r.onstart=()=>{ev(`${i+1} start`);started=performance.now()-t0;if(!fin)rcShow('收音中，請說',null,'live')};
+    r.onerror=e=>{ev(`${i+1} error ${e.error}`);r._e=e.error};
+    r.onresult=e=>{txt=[...e.results].map(x=>x[0].transcript.trim()).join(' ');ev(`${i+1} result “${txt}”`);if(fin)return;$('raw').textContent=txt;clearTimeout(q);
+      if(r.continuous)q=setTimeout(()=>out(''),SETTLE);else q=setTimeout(()=>out(''),4000)};
+    r.onend=()=>{ev(`${i+1} end`);ended=true;endCb?.();if(!fin)out(txt?'':r._e||'自己結束')};
+    $('skip').disabled=false;rcSkip=()=>{ev('使用者略過');out('使用者略過')};
+    ev(`${i+1} call start()`);try{r.start()}catch(e){ev('start 例外 '+e.name);ended=true;out('throw '+e.name)}
+  });
+}
+async function rcRun(){
+  const keys=Object.keys(RM);if(RC.k>=keys.length)return rcEnd();
+  const m=keys[RC.k],L=RC.left?.log||[];
+  if(!RC.left)RC.left={m,q:shuf([26,45,60,81,100,140,41,85,57,96]).slice(0,3),log:L};
+  const q=RC.left.q;ev('===== '+RM[m]+(L.length?' 重新整理後':''));
+  const bye=()=>rcFlush();
+  if(!L.length){
+    $('prog').textContent=`恢復 ${RC.k+1} / ${keys.length}`;$('tg').textContent=RM[m];$('tg').classList.add('w');$('tg').style.fontSize='26px';
+    $('hint').textContent=m==='tap'?'共 3 題，每題都要點一下再說':'共 3 題，只點這一次，之後直接說';
+    await rcWait('每種方法開始前頁面會重新整理','開始這個方法');
+  }
+  $('hint').textContent='';
+  for(let i=L.length;i<3;i++){
+    const me=RC;rcNum(q[i],i);
+    if(m==='tap'&&i>0)await rcWait('準備好再點','點一下開始說');
+    if(m==='gum'&&i>0){try{const st=await navigator.mediaDevices.getUserMedia({audio:true});ev('getUserMedia ok');st.getTracks().forEach(t=>t.stop());await zz(300)}catch(e){ev('getUserMedia '+e.name)}}
+    rcShow('啟動麥克風…');
+    let o=await rcCap(m,q[i],m==='reload'&&L.length?0:i);
+    if(RC!==me)return;
+    if(m==='reload'&&i===1&&!o.got){ // 自動不行，改成點一下再試一次
+      await rcWait('沒收到，點一下再試','點一下開始說');rcNum(q[i],i);rcShow('啟動麥克風…');const p=await rcCap(m,q[i],0);if(RC!==me)return;o={...p,err:p.got?'':p.err,note:'自動失敗，點一下'+(p.got?'後收到':'也沒收到')};
+    }
+    L.push(o);rcShow(o.got?'有收到：'+o.raw:'這題沒收到（'+o.err+'）',null,o.got?'good':'bad');await zz(1100);
+    if(RC!==me)return;
+    if(m==='reload'&&i===0){rcFlush();rcSave();return location.reload()}
+    if(m==='reload'&&i===1)break;
+  }
+  RC.res.push({m,log:L});RC.left=null;RC.k++;bye();rcSave();location.reload();
+}
+function rcFlush(){RC.ev.push(...EV);EV=[]}
+function rcEnd(){
+  if(!RC||RC.done)return;
+  rcSkip?.();rcFlush();if(RC.left?.log.length)RC.res.push({m:RC.left.m,log:RC.left.log});const X=RC;rcClear();rcGo=null;rcSkip=null;
+  $('vol').hidden=true;$('tiles').innerHTML='';
+  if(!X.res.length){RC=null;return view('home')}
+  const good=X.res.filter(x=>x.log.length>=2&&x.log.every(y=>y.got&&!y.note));
+  $('verd').textContent=good.length?'可以恢復：'+good.map(x=>RM[x.m]).join('、'):'沒有一種方法能自動恢復';$('verd').className='verd '+(good.length?'ok':'wa');
+  $('verdN').textContent='每題都收到才算成功。';
+  $('h1b').textContent='各方法';$('h2b').textContent='每題紀錄';
+  $('grp').innerHTML='<tr><th>方法</th><th>收到</th></tr>'+X.res.map(x=>`<tr><td>${RM[x.m]}</td><td>${x.log.filter(y=>y.got).length}/${x.log.length}</td></tr>`).join('');
+  $('bad').innerHTML=X.res.map(x=>x.log.map((y,i)=>`<tr><td>${RM[x.m]} ${i+1}</td><td>${y.n}</td><td>${esc(y.got?'聽到 '+y.raw:'沒收到：'+y.err)}${y.note?'（'+y.note+'）':''}</td></tr>`).join('')).join('');
+  $('rep').value=['斷線恢復測試報告（版本 4）',ua,...X.res.map(x=>`${RM[x.m]}：收到 ${x.log.filter(y=>y.got).length}/${x.log.length}｜`+x.log.map(y=>`${y.n}→${y.got?y.raw:'×'+y.err}${y.note?'['+y.note+']':''}`).join('，')),'事件：',...X.ev].join('\n');
+  RC={done:true};view('end');
+}
+setTimeout(rcBoot,0);
+
 
 /* 結果 */
 const pc=(a,b)=>b?Math.round(a/b*100)+'%':'—',med=a=>{a=a.filter(x=>x!=null).sort((x,y)=>x-y);return a.length?a[a.length>>1]:null},sec=x=>x==null?'—':(x/1000).toFixed(1)+' 秒';
@@ -357,13 +464,21 @@ function finish(){
   $('tiles').innerHTML=[[pc(k1,n),'一次聽對'],[wr+' 題','聽錯'],[un+' 題','聽不懂／跳過'],[sec(lat),'開口到出結果'],[sec(open),'出題到開始收音'],[n+' 題','有效題數']].map(([a,b])=>`<div><b>${a}</b><span>${b}</span></div>`).join('');
   const G={};LOG.forEach(x=>{const g=G[grp(x.n)]??=[0,0,0];g[0]++;if(x.ok1)g[1]++;if(!x.ok&&x.v!=null)g[2]++});
   $('grp').innerHTML='<tr><th>分數類型</th><th>題數</th><th>一次聽對</th><th>聽錯</th></tr>'+Object.entries(G).map(([a,g])=>`<tr><td>${a}</td><td>${g[0]}</td><td>${pc(g[1],g[0])}</td><td>${g[2]}</td></tr>`).join('');
+  const dur=(performance.now()-EV0)/1000;
+  const half=(a,b)=>{const g=LOG.slice(a,b);return `${g.filter(x=>x.ok1).length}/${g.length}`};
+  const SKL=SK?[`全程 ${dur.toFixed(0)} 秒｜斷線 ${DISC.length} 次${DISC.map(d=>`（${d.t.toFixed(0)}s ${d.at} ${d.err}）`).join('')}`,
+    `無音效 ${half(0,10)}｜有音效 ${half(10,20)}｜安靜 ${QUIET} 秒後 ${half(20,30)}，當時收音${SK.alive==null?'（沒做到）':SK.alive?'還在':'已停'}｜叮咚聲 ${SK.vol||'未回答'}`]:[];
+  $('vol').hidden=!SK;
+  if(SK){$('verd').textContent=n<30?`只做了 ${n} / 30 題`:DISC.length?`中途斷線 ${DISC.length} 次`:'全程沒有斷線';$('verd').className='verd '+(n<30||DISC.length?'wa':'ok');$('verdN').textContent=SKL.join('　');
+    $('volS').innerHTML=['正常','很小聲','聽不到'].map(x=>`<button type="button" aria-pressed="${SK.vol===x}" class="${SK.vol===x?'on':''}" data-v="${x}">${x}</button>`).join('');
+    $('volS').onclick=e=>{const b=e.target.closest('button');if(!b)return;const old=SK.vol||'未回答';SK.vol=b.dataset.v;$('rep').value=$('rep').value.replace('叮咚聲 '+old,'叮咚聲 '+SK.vol);$('verdN').textContent=$('verdN').textContent.replace('叮咚聲 '+old,'叮咚聲 '+SK.vol);[...$('volS').children].forEach(x=>{const on=x===b;x.classList.toggle('on',on);x.setAttribute('aria-pressed',on)})}}
   const B=LOG.filter(x=>!x.ok1);
   $('bad').innerHTML=B.length?'<tr><th>題目</th><th>結果</th><th>聽到的文字</th></tr>'+B.map(x=>`<tr><td>${nm(x.n)}</td><td class="${x.ok?'wa':'ng'}">${x.ok?'重說後聽對':nm(x.v)}</td><td>${esc([...x.miss,x.skip?'':x.raw].filter(Boolean).join(' → ')||x.raw)}</td></tr>`).join(''):'<tr><td>全部一次聽對。</td></tr>';
-  $('rep').value=['語音報分測試報告（版本 3）',`題組 ${C.set}｜收音 ${METH[how]}｜音效 ${C.snd?'開':'關'}｜口音 ${C.lang}｜${/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':'電腦'}`,ua,
+  $('rep').value=[SK?'長時間測試報告（版本 4）':'語音報分測試報告（版本 4）',...SKL,`題組 ${C.set}｜收音 ${METH[how]}｜音效 ${SK?'後 20 題開':C.snd?'開':'關'}｜口音 ${C.lang}｜${/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':'電腦'}`,ua,
     `一次聽對 ${k1}/${n}（${pc(k1,n)}）｜聽錯 ${wr}｜聽不懂或跳過 ${un}｜開口到出結果 ${sec(lat)}｜出題到收音 ${sec(open)}`,
     ...Object.entries(G).map(([a,g])=>`${a}：${g[1]}/${g[0]}，聽錯 ${g[2]}`),
     '沒聽對：',...B.map(x=>`${nm(x.n)} → ${x.ok?'重說後聽對':nm(x.v)}｜${[...x.miss,x.raw].join(' → ')}${x.alt?'｜候選中有正解':''}`),
-    '錯誤代碼：'+([...new Set(LOG.flatMap(x=>x.errs))].join('、')||'無'),'事件（最後 60 筆）：',...EV.slice(-60)].join('\n');
+    '錯誤代碼：'+([...new Set(LOG.flatMap(x=>x.errs))].join('、')||'無'),'事件：',...(SK?EV.filter(x=>!/ result /.test(x)).slice(-150):EV.slice(-60))].join('\n');
   view('end');
 }
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('rep').value);$('copy').textContent='已複製，貼給我即可'}catch(e){$('rep').focus();$('rep').select();$('copy').textContent='請長按下方文字複製'}setTimeout(()=>$('copy').textContent='複製報告',2500)};
