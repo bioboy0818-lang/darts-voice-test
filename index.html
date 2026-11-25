@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>語音報分測試</title>
+<style>
+:root{color-scheme:dark;--bg:#121713;--fg:#f2ead6;--mut:#cfc6b0;--pan:#1a211b;--line:#3b463d;--gold:#e0b341;--ok:#6fd39a;--ng:#ff8f87;--num:"Barlow Condensed","Arial Narrow",sans-serif}
+*{box-sizing:border-box;min-width:0}html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "Noto Sans TC","PingFang TC",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:480px;margin:0 auto;padding-block:max(14px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-bottom));padding-inline:16px;display:grid;gap:14px;align-content:start}
+h1{font-size:25px;margin:0;line-height:1.25}h2{font-size:17px;margin:0}p{margin:0}
+.note{color:var(--mut);font-size:14px}
+button{font:600 16px/1.3 inherit;font-family:inherit;min-height:46px;border-radius:11px;border:1px solid var(--line);background:#222b24;color:var(--fg);padding:6px 12px;cursor:pointer;touch-action:manipulation}
+button.on{background:var(--fg);color:#17130d}button.big{background:var(--gold);color:#17130d;border-color:var(--gold);font-weight:800;font-size:21px;min-height:58px}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}button:disabled{opacity:.4}
+.seg{display:flex;gap:6px;flex-wrap:wrap}.seg button{flex:1 1 0;min-width:fit-content}.seg small{display:block;font-weight:400;font-size:12px}
+.card{background:var(--pan);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
+.ck{display:flex;justify-content:space-between;gap:10px;font-size:15px}.ck b{text-align:right}
+.ok{color:var(--ok)}.ng{color:var(--ng)}.wa{color:var(--gold)}
+.lab{font-weight:600;margin-bottom:6px;font-size:15px}
+.top{display:flex;justify-content:space-between;align-items:center}
+.tg{font:800 clamp(84px,30vw,136px)/1 var(--num);text-align:center;color:#fff;padding:18px 0 4px;font-variant-numeric:tabular-nums}.tg.w{font-size:clamp(52px,17vw,76px);padding:40px 0 22px}
+.hint{text-align:center;color:var(--mut);min-height:26px;font-size:17px}
+.mic{border:2px dashed var(--line);border-radius:16px;padding:14px;text-align:center;min-height:150px;display:grid;align-content:center;gap:4px}
+.mic.live{border:2px solid var(--gold)}.mic.good{border:2px solid var(--ok);background:#12402a}.mic.bad{border:2px solid var(--ng);background:#4a1715}
+.mic b{font:800 54px/1 var(--num);color:#fff;min-height:54px}.mic .raw{font-size:16px;color:var(--mut);overflow-wrap:anywhere;min-height:24px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tiles div{border:1px solid var(--line);border-radius:12px;padding:8px 4px;text-align:center}.tiles b{display:block;font:800 30px/1.1 var(--num);color:#fff}.tiles span{font-size:13px;color:var(--mut)}
+.verd{font-size:20px;font-weight:800;text-wrap:balance}
+table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}th{font-weight:600;color:var(--mut);font-size:13px}
+textarea{width:100%;height:150px;background:#0d110e;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px;font:13px/1.4 ui-monospace,monospace}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main id="home">
+  <h1>語音報分測試</h1>
+  <p class="note">畫面出現分數，用英文唸出來，看這支裝置聽不聽得懂。0 分請唸 no score。全程約 2～3 分鐘。</p>
+  <div class="card" id="env"></div>
+  <div><div class="lab">題組</div><div class="seg" id="set"></div></div>
+  <div><div class="lab">收音方式</div><div class="seg" id="how"></div></div>
+  <div><div class="lab">辨識口音</div><div class="seg" id="lang"></div></div>
+  <div><div class="lab">顯示英文唸法</div><div class="seg" id="tip"></div></div>
+  <button class="big" id="go">開始測試</button>
+  <p class="note" id="goNote">按下後瀏覽器會問麥克風權限，請選允許。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本頁不錄音、不上傳、不儲存。</p>
+  <p class="note">版本 2</p>
+</main>
+<main id="run" hidden>
+  <div class="top"><span id="prog"></span><button id="stop">結束</button></div>
+  <div><div class="tg" id="tg"></div><div class="hint" id="hint"></div></div>
+  <div class="mic" id="mic" aria-live="polite"><span id="st"></span><b id="got"></b><span class="raw" id="raw"></span></div>
+  <button class="big" id="talk">點一下開始說</button>
+  <div class="two"><button id="redo">剛才我唸錯，重來</button><button id="skip">跳過這題</button></div>
+</main>
+<main id="end" hidden>
+  <h1>測試結果</h1>
+  <div class="card"><p class="verd" id="verd"></p><p class="note" id="verdN"></p></div>
+  <div class="tiles" id="tiles"></div>
+  <div class="card"><h2>分組正確率</h2><table id="grp"></table></div>
+  <div class="card"><h2>沒聽對的題目</h2><table id="bad"></table></div>
+  <button class="big" id="copy">複製報告</button>
+  <textarea id="rep" readonly aria-label="測試報告文字"></textarea>
+  <div class="two"><button id="again">再測一次</button><button id="back">改設定</button></div>
+</main>
+<script>
+{
+/* ---------- 英文報分 → 數字。只看聽到的字，不看正確答案 ---------- */
+const W={one:1,won:1,two:2,to:2,too:2,three:3,tree:3,free:3,four:4,for:4,fore:4,five:5,six:6,sex:6,sicks:6,seven:7,eight:8,ate:8,nine:9,nein:9,
+  ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,
+  twenty:20,thirty:30,thirdy:30,dirty:30,thirsty:30,forty:40,fourty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90,
+  zero:0,oh:0,o:0};
+const UN=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const TE=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+const words=n=>n===0?'no score':n>=100?'one hundred'+(n%100?' and '+words(n%100):''):n<20?UN[n]:TE[n/10|0]+(n%10?'-'+UN[n%10]:'');
+const NOSCORE=/^(no|know|now|nose?) (scores?|scored|scor|store|stores|skor|score's|school|schools|scroll|skull|scar|square)$|^noscore$|^(zero|nil|nothing|bust|busted|0)$/;
+const SKIP=new Set(['and','n','a','an','um','uh','er','points','point','score','scored','scores','the','please']);
+function parseScore(txt){
+  let s=String(txt||'').toLowerCase().replace(/[’]/g,"'").replace(/(\d),(?=\d{3}\b)/g,'$1').replace(/[^a-z0-9' ]+/g,' ')
+    .replace(/(\d+)(st|nd|rd|th|s)\b/g,'$1').replace(/\b(for|four) (tea|t|tee)\b/g,'forty').replace(/\s+/g,' ').trim();
+  if(!s)return null;
+  if(NOSCORE.test(s))return 0;
+  const A=[];
+  for(const w of s.split(' ')){
+    if(/^\d+$/.test(w))A.push(+w);
+    else if(w==='hundred'||w==='hundreds')A.push('H');
+    else if(/^(ton|tons|tonne|tun)$/.test(w))A.push('T');
+    else if(w in W)A.push(W[w]);
+    else if(!SKIP.has(w))return null;          // 有聽不懂的字就不猜
+  }
+  const v=val(A);
+  if(v!=null)return v>=0&&v<=180?v:null;
+  const h=A.length/2;                          // 同一個分數唸兩次
+  if(h>=1&&h%1===0&&A.slice(0,h).join()===A.slice(h).join()){const x=val(A.slice(0,h));return x!=null&&x<=180?x:null}
+  return null;
+}
+const tens=x=>x>=20&&x<=90&&x%10===0, unit=x=>x>=1&&x<=9;
+function low(A){ // 0–99
+  if(A.length===1&&typeof A[0]==='number'&&A[0]<100)return A[0];
+  if(A.length===2&&tens(A[0])&&unit(A[1]))return A[0]+A[1];
+  if(A.length===2&&A[0]===0&&unit(A[1]))return A[1];
+  return null;
+}
+function val(A){
+  if(!A.length)return null;
+  const m=A.findIndex(x=>x==='H'||x==='T');
+  if(m>=0){
+    if(A[m]==='H'?!(m===0||m===1&&(A[0]===1)):m!==0)return null;
+    const r=A.slice(m+1);if(!r.length)return 100;
+    const l=low(r);return l==null?null:100+l;
+  }
+  if(A.length===1)return A[0];
+  let l=low(A);if(l!=null)return l;
+  if(A[0]===100||A[0]===1){l=low(A.slice(1));
+    if(l!=null&&(A[0]===100||l>=10||A.length===3&&A[1]===0))return 100+l}
+  if(A[0]===10&&tens(A[1])){l=low(A.slice(1));if(l!=null)return 100+l}   // ton forty 被聽成 ten forty
+  if(A.length<=3&&A.every(x=>x>=0&&x<=9))return+A.join('');            // 逐位唸 one four zero
+  return null;
+}
+
+const $=id=>document.getElementById(id);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const ua=navigator.userAgent;
+const C={set:'quick',how:'auto',lang:'en-US',tip:false};
+const SETTLE=900;      // 聽到內容後安靜多久算講完（毫秒）
+function seg(id,o){const p=()=>{$(id).innerHTML=o.map(([v,l,s])=>`<button type="button" aria-pressed="${C[id]===v}" class="${C[id]===v?'on':''}" data-v="${v}">${l}${s?`<small>${s}</small>`:''}</button>`).join('')};
+  $(id).onclick=e=>{const b=e.target.closest('button');if(b){C[id]=o.find(x=>String(x[0])===b.dataset.v)[0];p()}};p()}
+seg('set',[['quick','綜合 30 題','建議'],['teen','近音 27 題','13／30 類'],['rand','隨機 30 題']]);
+seg('how',[['auto','自動收音','正式功能的方式'],['tap','每題點一下']]);
+seg('lang',[['en-US','美式'],['en-GB','英式']]);
+seg('tip',[[false,'不顯示'],[true,'顯示']]);
+/* 環境檢查 */
+const inClaude=/ Claude\//.test(ua),inapp=/ Claude\/|Line\/|FBAN|FBAV|Instagram|MicroMessenger/i.test(ua),sa=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+const E=[['安全連線',isSecureContext&&location.protocol!=='file:'?['可用','ok']:location.protocol==='file:'?['直接開檔案，麥克風會一直詢問','wa']:['不是 HTTPS，麥克風會被擋','ng']],
+  ['語音辨識功能',SR?['有','ok']:['這個瀏覽器沒有','ng']],
+  ['開啟方式',inClaude?['Claude 內建瀏覽器會擋麥克風，請改用 Chrome','ng']:inapp?['App 內建瀏覽器，請改用 Safari／Chrome','ng']:sa?['主畫面 App，可能不支援','wa']:['一般瀏覽器','ok']],
+  ['網路',navigator.onLine?['連線中','ok']:['離線，可能無法辨識','wa']]];
+$('env').innerHTML=E.map(([a,[b,c]])=>`<div class="ck"><span>${a}</span><b class="${c}">${b}</b></div>`).join('');
+(async()=>{try{const p=await navigator.permissions.query({name:'microphone'}),el=document.createElement('div');el.className='ck';$('env').append(el);
+  const paint=()=>{const[t,c]={granted:['已允許','ok'],prompt:['開始時會詢問，請按允許','wa'],denied:['已封鎖，請到網址列左側的網站設定改成允許','ng']}[p.state];el.innerHTML=`<span>麥克風權限</span><b class="${c}">${t}</b>`};p.onchange=paint;paint()}catch(e){}})();
+if(!SR){$('go').disabled=true;$('goNote').textContent='請改用 iPhone 的 Safari、Android 的 Chrome，或電腦版 Chrome 開啟。'}
+
+/* 出題 */
+const shuf=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+const TY=[13,14,15,16,17,18,19,30,40,50,60,70,80,90],HT=[113,114,115,116,117,118,119,130,140,150,160,170,180];
+const ALL=[...Array(180).keys()].map(i=>i+1),isTy=n=>TY.includes(n),isHT=n=>HT.includes(n)||n===190;
+const grp=n=>n===0?'no score':isTy(n)?'13～19／30～90':isHT(n)?'113～119／130～180':n>=100?'其他 100 以上':'其他 1～99';
+function deck(){
+  const of=f=>shuf(ALL.filter(f));
+  if(C.set==='teen')return shuf([...TY,...HT]);
+  if(C.set==='rand')return shuf([...shuf(ALL).slice(0,28),0,0]);
+  return shuf([...TY,...shuf(HT).slice(0,5),...of(n=>grp(n)==='其他 100 以上').slice(0,4),...of(n=>grp(n)==='其他 1～99').slice(0,5),0,0]);
+}
+
+/* 測試流程 */
+let Q=null,I=0,LOG=[],cur=null,rec=null,tok=0,timer=null,busy=false;
+const view=v=>{['home','run','end'].forEach(k=>$(k).hidden=k!==v);scrollTo(0,0)};
+function begin(){Q=deck();I=0;LOG=[];view('run');ask(true)}
+function ask(gesture){
+  clearTimeout(timer);kill();
+  if(I>=Q.length)return finish();
+  cur={n:Q[I],t0:performance.now(),miss:[],t1:0,done:false};
+  $('prog').textContent=`第 ${I+1} / ${Q.length} 題`;
+  $('tg').textContent=cur.n||'NO SCORE';$('tg').classList.toggle('w',!cur.n);
+  $('hint').textContent=C.tip?words(cur.n):'';
+  $('redo').disabled=!LOG.length;$('skip').disabled=false;
+  $('got').textContent='';$('raw').textContent='';
+  if(C.how==='auto'||gesture&&C.how==='auto')listen();else idle('準備好就點下面按鈕');
+}
+function idle(m,cls=''){$('mic').className='mic '+cls;$('st').textContent=m;$('talk').disabled=false;$('talk').textContent='點一下開始說'}
+function kill(){tok++;busy=false;if(rec){const r=rec;rec=null;try{r.abort()}catch(e){}}}
+function listen(tries=0){
+  kill();clearTimeout(timer);
+  const id=tok,c=cur;let r;
+  try{r=new SR()}catch(e){return idle('無法建立語音辨識：'+e.message,'bad')}
+  rec=r;r.lang=C.lang;r.interimResults=true;r.continuous=true;r.maxAlternatives=5;
+  let txt='',alts=[],quiet=null,err='';
+  const mine=()=>id===tok&&c===cur&&!c.done;
+  const settle=()=>{if(!mine())return;clearTimeout(quiet);judge(txt,alts)};
+  r.onstart=()=>{if(!mine())return;c.ts??=performance.now();$('mic').className='mic live';$('st').textContent='收音中，請說';$('talk').disabled=true;$('talk').textContent='收音中…'};
+  r.onspeechstart=()=>{if(mine()){c.t1||=performance.now();$('st').textContent='聽到聲音'}};
+  r.onresult=e=>{
+    if(!mine())return;
+    c.t1||=performance.now();
+    const P=[];alts=[];
+    for(let i=0;i<e.results.length;i++){
+      const s=e.results[i][0].transcript.trim();if(!s)continue;
+      // Android 會把累積的文字重複送一次，後段包含前段時只留後段
+      if(P.length&&s.toLowerCase().startsWith(P[P.length-1].toLowerCase()))P[P.length-1]=s;else P.push(s);
+    }
+    txt=P.join(' ');
+    const L=e.results[e.results.length-1];
+    if(P.length===1)for(let k=1;k<L.length;k++)alts.push(L[k].transcript.trim());
+    const v=parseScore(txt);
+    $('raw').textContent=txt;$('got').textContent=v==null?'':v||'NO SCORE';
+    c.tl=performance.now();clearTimeout(quiet);quiet=setTimeout(settle,SETTLE);
+  };
+  r.onerror=e=>{err=e.error};
+  r.onend=()=>{
+    if(!mine())return;
+    clearTimeout(quiet);rec=null;
+    if(txt)return judge(txt,alts);
+    const M={'not-allowed':'沒有麥克風權限，或系統不允許自動收音。請點下面按鈕再試，仍不行就到瀏覽器設定允許麥克風','service-not-allowed':'這個瀏覽器不允許語音服務（iPhone 請確認已開啟 Siri 或聽寫）','audio-capture':'找不到麥克風','network':'連不上語音服務，請檢查網路','language-not-supported':'不支援這個口音，請回設定改另一種'};
+    (c.errs??=[]).push(err||'end');
+    if(M[err])return idle(M[err],'bad');
+    if(C.how==='auto'&&tries<2){$('st').textContent='沒聽到，請再說一次';timer=setTimeout(()=>mine()&&listen(tries+1),250);return}
+    idle('沒聽到聲音，點下面按鈕再說一次');
+  };
+  $('mic').className='mic';$('st').textContent='啟動麥克風…';$('talk').disabled=true;$('got').textContent='';$('raw').textContent='';
+  try{r.start()}catch(e){rec=null;idle('無法自動開始，請點下面按鈕')}
+}
+function judge(txt,alts){
+  const c=cur;let v=parseScore(txt),used=txt;
+  if(v==null)for(const a of alts){v=parseScore(a);if(v!=null){used=a;break}}   // 依辨識排名取第一個能解讀的
+  const now=performance.now();
+  kill();
+  if(v==null){
+    c.miss.push(txt);$('redo').disabled=false;
+    $('got').textContent='';$('raw').textContent='聽到：'+txt;$('mic').className='mic bad';$('st').textContent='聽不懂，請再說一次';
+    if(C.how==='auto'&&c.miss.length<3)timer=setTimeout(()=>cur===c&&listen(),900);else idle('聽不懂，點下面按鈕再說一次','bad');
+    return;
+  }
+  c.done=true;
+  const ok=v===c.n;
+  LOG.push({n:c.n,v,raw:used,first:txt,miss:c.miss,ok,ok1:ok&&!c.miss.length,alt:alts.some(a=>parseScore(a)===c.n),
+    lat:c.t1?now-c.t1:null,tail:c.tl?now-c.tl:null,open:c.ts?c.ts-c.t0:null,errs:c.errs||[]});
+  $('got').textContent=v||'NO SCORE';$('raw').textContent='聽到：'+used;
+  $('mic').className='mic '+(ok?'good':'bad');$('st').textContent=ok?'正確':`聽成 ${v||'NO SCORE'}`;
+  $('talk').disabled=true;$('talk').textContent='下一題…';$('redo').disabled=false;$('skip').disabled=true;
+  I++;timer=setTimeout(()=>ask(),ok?900:2200);
+}
+$('go').onclick=begin;$('again').onclick=begin;$('back').onclick=()=>view('home');
+$('talk').onclick=()=>{if(cur&&!cur.done)listen()};
+$('redo').onclick=()=>{ // 這題已有「聽不懂」就重來這題，否則取消上一筆重唸
+  if(cur&&!cur.done&&cur.miss.length)return ask(true);
+  if(!LOG.length)return;LOG.pop();I--;
+  ask(true)};
+$('skip').onclick=()=>{if(!cur||cur.done)return;cur.done=true;
+  LOG.push({n:cur.n,v:null,raw:cur.miss.join(' / ')||'（沒聽到）',miss:cur.miss,ok:false,ok1:false,alt:false,lat:null,tail:null,open:null,errs:cur.errs||[],skip:true});I++;ask(true)};
+$('stop').onclick=()=>finish();
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&!$('run').hidden&&cur&&!cur.done){clearTimeout(timer);kill();idle('已暫停，點下面按鈕繼續')}});
+
+/* 結果 */
+const pc=(a,b)=>b?Math.round(a/b*100)+'%':'—',med=a=>{a=a.filter(x=>x!=null).sort((x,y)=>x-y);return a.length?a[a.length>>1]:null},sec=x=>x==null?'—':(x/1000).toFixed(1)+' 秒';
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const nm=n=>n==null?'跳過':n||'NO SCORE';
+function finish(){
+  clearTimeout(timer);kill();cur=null;
+  if(!LOG.length)return view('home');
+  const n=LOG.length,k1=LOG.filter(x=>x.ok1).length,wr=LOG.filter(x=>!x.ok&&x.v!=null).length,un=LOG.filter(x=>x.miss.length||x.skip).length,r=k1/n;
+  const lat=med(LOG.map(x=>x.lat)),open=med(LOG.map(x=>x.open));
+  $('verd').textContent=n<20?`只測了 ${n} 題，題數不足以下結論`:r>=.95?'達標，可以加入編輯版':r>=.85?'接近，建議送出前要確認':'未達標，建議改試離線模型';
+  $('verd').className='verd '+(n<20?'wa':r>=.95?'ok':r>=.85?'wa':'ng');
+  $('verdN').textContent=`標準：一次就聽對 95% 以上。最要緊的是「聽錯」，因為會把你報對的判成錯；「聽不懂」只需要重說。`;
+  $('tiles').innerHTML=[[pc(k1,n),'一次聽對'],[wr+' 題','聽錯'],[un+' 題','聽不懂／跳過'],[sec(lat),'開口到出結果'],[sec(open),'出題到開始收音'],[n+' 題','有效題數']].map(([a,b])=>`<div><b>${a}</b><span>${b}</span></div>`).join('');
+  const G={};LOG.forEach(x=>{const g=G[grp(x.n)]??=[0,0,0];g[0]++;if(x.ok1)g[1]++;if(!x.ok&&x.v!=null)g[2]++});
+  $('grp').innerHTML='<tr><th>分數類型</th><th>題數</th><th>一次聽對</th><th>聽錯</th></tr>'+Object.entries(G).map(([a,g])=>`<tr><td>${a}</td><td>${g[0]}</td><td>${pc(g[1],g[0])}</td><td>${g[2]}</td></tr>`).join('');
+  const B=LOG.filter(x=>!x.ok1);
+  $('bad').innerHTML=B.length?'<tr><th>題目</th><th>結果</th><th>聽到的文字</th></tr>'+B.map(x=>`<tr><td>${nm(x.n)}</td><td class="${x.ok?'wa':'ng'}">${x.ok?'重說後聽對':nm(x.v)}</td><td>${esc([...x.miss,x.skip?'':x.raw].filter(Boolean).join(' → ')||x.raw)}</td></tr>`).join(''):'<tr><td>全部一次聽對。</td></tr>';
+  $('rep').value=['語音報分測試報告（版本 2）',`題組 ${C.set}｜收音 ${C.how}｜口音 ${C.lang}｜${/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':'電腦'}`,ua,
+    `一次聽對 ${k1}/${n}（${pc(k1,n)}）｜聽錯 ${wr}｜聽不懂或跳過 ${un}｜開口到出結果 ${sec(lat)}｜出題到收音 ${sec(open)}`,
+    ...Object.entries(G).map(([a,g])=>`${a}：${g[1]}/${g[0]}，聽錯 ${g[2]}`),
+    '沒聽對：',...B.map(x=>`${nm(x.n)} → ${x.ok?'重說後聽對':nm(x.v)}｜${[...x.miss,x.raw].join(' → ')}${x.alt?'｜候選中有正解':''}`),
+    '錯誤代碼：'+([...new Set(LOG.flatMap(x=>x.errs))].join('、')||'無')].join('\n');
+  view('end');
+}
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('rep').value);$('copy').textContent='已複製，貼給我即可'}catch(e){$('rep').focus();$('rep').select();$('copy').textContent='請長按下方文字複製'}setTimeout(()=>$('copy').textContent='複製報告',2500)};
+}
+</script>
+</body>
+</html>
