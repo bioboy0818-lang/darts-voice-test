@@ -45,12 +45,12 @@ textarea{width:100%;height:150px;background:#0d110e;color:var(--fg);border:1px s
   <div><div class="lab">辨識口音</div><div class="seg" id="lang"></div></div>
   <div><div class="lab">題間音效</div><div class="seg" id="snd"></div></div>
   <div><div class="lab">顯示英文唸法</div><div class="seg" id="tip"></div></div>
-  <button class="big" id="sk">1. 長時間測試（約 4 分鐘）</button>
-  <button class="big" id="rc">2. 斷線恢復測試（約 3 分鐘）</button>
+  <button class="big" id="rc">最後一輪測試（約 3 分鐘）</button>
+  <button id="sk">長時間測試（約 4 分鐘）</button>
   <button id="dg" hidden>收音診斷</button>
   <button id="go">一般測試</button>
-  <p class="note" id="goNote">按下後瀏覽器會問麥克風權限，請選允許。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本頁不錄音、不上傳、不儲存。</p>
-  <p class="note">版本 5</p>
+  <p class="note" id="goNote">按下後瀏覽器會問麥克風權限，請選允許。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本頁不錄音、不上傳；只有最後一輪測試會在手機暫存測試紀錄，做完就清除。</p>
+  <p class="note">版本 6</p>
 </main>
 <main id="run" hidden>
   <div class="top"><span id="prog"></span><button id="stop">結束</button></div>
@@ -354,120 +354,141 @@ function dgEnd(){
   $('grp').innerHTML='<tr><th>方法</th><th>收到</th><th>聽對</th></tr>'+R.map(x=>`<tr><td>${METH[x.m]}</td><td class="${x.g===DQ?'ok':'ng'}">${x.g}/${DQ}</td><td>${x.ok}</td></tr>`).join('');
   $('bad').innerHTML=R.map(x=>x.log.map((y,i)=>`<tr><td>${METH[x.m]} ${i+1}</td><td>${nm(y.n)}</td><td>${y.got?'聽到 '+esc(y.raw):'沒收到：'+esc(y.err)}</td></tr>`).join('')).join('');
   $('h1b').textContent='各方法';$('h2b').textContent='每題紀錄';
-  $('rep').value=['收音診斷報告（版本 5）',ua,`口音 ${C.lang}｜音效 ${C.snd?'開':'關'}｜audioSession ${navigator.audioSession?.type||'無'}`,
+  $('rep').value=['收音診斷報告（版本 6）',ua,`口音 ${C.lang}｜音效 ${C.snd?'開':'關'}｜audioSession ${navigator.audioSession?.type||'無'}`,
     ...R.map(x=>`${METH[x.m]}：收到 ${x.g}/${DQ}，聽對 ${x.ok}｜`+x.log.map(y=>`${nm(y.n)}→${y.got?y.raw:'×'+y.err}${y.open!=null?'('+(y.open/1000).toFixed(1)+'s)':''}`).join('，')),'事件：',...EV].join('\n');
   view('end');$('vol').hidden=true;
 }
 $('dg').onclick=dgStart;
 
 
-/* ---------- 斷線恢復測試：每種方法都在剛載入的頁面開始，互不影響 ---------- */
-const RM={hand:'立即接續（自動）',away:'切出去再回來，點一下',awayre:'切出去再回來，重新整理',iframe:'每題換隱藏框架',playrec:'設定為錄放音模式',once:'短收音，自動重開'};
+/* ---------- 最後一輪：三項測試，每項都要在新分頁做 ---------- */
+const RM={audio:'音效保持開啟，斷了再接',away:'切出去再回來',meter:'收音失效時量麥克風'},RK=Object.keys(RM),KEY='lab6';
 let RC=null,rcSkip=null,rcGo=null;
-const rcSave=()=>{try{sessionStorage.setItem('rc',JSON.stringify(RC))}catch(e){}};
-const rcClear=()=>{try{sessionStorage.removeItem('rc')}catch(e){}};
 const zz=ms=>new Promise(r=>setTimeout(r,ms));
-function rcStart(){DG=null;SK=null;Eng.close();RC={k:0,res:[],ev:[],left:null};rcSave();location.reload()}
+const rcSave=()=>{try{localStorage.setItem(KEY,JSON.stringify({...RC,at:Date.now()}))}catch(e){}};
+const rcLoad=()=>{try{const d=JSON.parse(localStorage.getItem(KEY));return d&&Date.now()-d.at<36e5?d:null}catch(e){return null}};
+const rcClear=()=>{try{localStorage.removeItem(KEY)}catch(e){}};
+const used=v=>{try{if(v)sessionStorage.setItem('used','1');return!!sessionStorage.getItem('used')}catch(e){return false}};
+function rcFlush(){RC.ev.push(...EV);EV=[]}
+function rcView(){DG=null;SK=null;cur=null;clearTimeout(timer);clearTimeout(wd);EV=[];EV0=performance.now();view('run');$('redo').disabled=true;$('skip').disabled=true;$('skip').textContent='唸了沒反應，下一題'}
+function rcStart(){const dirty=Eng.n>0||used();Eng.close();RC={k:0,res:[],ev:[]};rcSave();rcView();dirty?rcNewTab():rcRun()}
 $('rc').onclick=rcStart;
+function rcBoot(){if(!SR||RC)return;const d=rcLoad();if(!d)return;RC=d;rcView();used()?rcNewTab():rcRun()}
 function rcShow(m,btn,cls=''){$('mic').className='mic '+cls;$('st').textContent=m;$('talk').textContent=btn||'請說';$('talk').disabled=!btn}
-function rcNum(n,i){$('tg').style.fontSize='';$('tg').classList.remove('w');$('tg').textContent=n;$('prog').textContent=`恢復 ${RC.k+1}/${Object.keys(RM).length}・第 ${i+1} / 3 題`;$('got').textContent='';$('raw').textContent=''}
-const rcWait=(m,btn)=>new Promise(r=>{rcShow(m,btn);rcGo=r});
+function rcTitle(t,h,size=28){$('tg').classList.add('w');$('tg').style.fontSize=size+'px';$('tg').textContent=t;$('hint').textContent=h;$('got').textContent='';$('raw').textContent=''}
+const rcHead=x=>$('prog').textContent=`第 ${RC.k+1} / ${RK.length} 項${x?'・'+x:''}`;
+function rcNum(n,x){rcHead(x);$('tg').style.fontSize='';$('tg').classList.remove('w');$('tg').textContent=n;$('hint').textContent='';$('got').textContent='';$('raw').textContent=''}
+const rcWait=(m,btn,sync,cls='')=>new Promise(r=>{rcShow(m,btn,cls);rcGo=()=>{if(sync)sync();r()}});
 function rcTap(){const g=rcGo;rcGo=null;if(g)g()}
-function rcBoot(){
-  let d=null;try{d=JSON.parse(sessionStorage.getItem('rc'))}catch(e){}
-  if(!d||!SR)return;
-  RC=d;EV=[];EV0=performance.now();view('run');$('redo').disabled=true;$('skip').disabled=true;$('skip').textContent='收不到，下一題';
-  rcRun();
+async function rcNewTab(){
+  const me=RC;rcHead('換新分頁');rcTitle('請換新分頁','關掉這個分頁，開新分頁輸入同一個網址，會自動接著做');
+  for(;;){await rcWait('進度已經記住。一定要關掉再開新的，不能只重新整理','複製網址');if(RC!==me)return;
+    try{await navigator.clipboard.writeText(location.href);$('raw').textContent='已複製，請關掉這個分頁'}catch(e){$('raw').textContent=location.href}}
 }
-function rcCap(m,n,i,o={}){ // 收一題；o.prev＝同一瞬間關舊的開新的，o.keep＝收完不關
+function rcCap(n,tag,o={}){ // o.prev＝同一瞬間關舊的開新的；o.keep＝收到後不關；o.first＝等久一點
   return new Promise(res=>{
-    let Ctor=SR,fr=null;
-    if(m==='iframe'){fr=document.createElement('iframe');fr.allow='microphone';fr.style.cssText='position:absolute;width:1px;height:1px;opacity:0;border:0';document.body.append(fr);Ctor=fr.contentWindow.SpeechRecognition||fr.contentWindow.webkitSpeechRecognition||SR;ev('iframe '+(Ctor===SR?'用主頁':'獨立'))}
-    if(m==='playrec')try{navigator.audioSession.type='play-and-record';ev('audioSession '+navigator.audioSession.type)}catch(e){ev('audioSession 無法設定')}
-    const r=new Ctor();r.lang=C.lang;r.interimResults=true;r.continuous=m!=='once';
-    let txt='',fin=false,q=null,started=null,ended=false,endCb=null;const t0=performance.now();
-    const w=setTimeout(()=>out('沒收到'),i===0?20000:10000);
+    const r=new SR();r.lang=C.lang;r.interimResults=true;r.continuous=true;
+    let txt='',fin=false,q=null,heard=false,ended=false,endCb=null;const t0=performance.now();let op=null;
+    const w=setTimeout(()=>out('沒收到'),o.first?20000:10000);
     const out=async err=>{
       if(fin)return;fin=true;clearTimeout(w);clearTimeout(q);rcSkip=null;$('skip').disabled=true;
-      if(o.keep&&txt){r._ended=()=>ended;if(ended)r._gone=true;return res({n,got:true,raw:txt,ok:parseScore(txt)===n,err:'',open:started,rec:r})}
-      if(!ended){ev('call stop()');try{r.stop()}catch(e){}await Promise.race([new Promise(z=>endCb=z),zz(2500)])}
-      if(!ended){ev('call abort()');try{r.abort()}catch(e){}await zz(300)}
-      if(fr)fr.remove();
-      res({n,got:!!txt,raw:txt,ok:parseScore(txt)===n,err,open:started})};
-    ['audiostart','speechstart','speechend','audioend'].forEach(k=>r['on'+k]=()=>ev(`${i+1} ${k}`));
-    r.onstart=()=>{ev(`${i+1} start`);started=performance.now()-t0;if(!fin)rcShow('收音中，請說',null,'live')};
-    r.onerror=e=>{ev(`${i+1} error ${e.error}`);r._e=e.error};
-    r.onresult=e=>{const all=[...e.results].map(x=>x[0].transcript.trim()).join(' ');ev(`${i+1} result “${all}”`);r._all=all;if(fin){r._more?.(all);return}txt=all;$('raw').textContent=txt;clearTimeout(q);
-      if(r.continuous)q=setTimeout(()=>out(''),SETTLE);else q=setTimeout(()=>out(''),4000)};
-    r.onend=()=>{ev(`${i+1} end`);ended=true;r._gone=true;endCb?.();if(!fin)out(txt?'':r._e||'自己結束')};
-    $('skip').disabled=false;rcSkip=()=>{ev('使用者略過');out('使用者略過')};
-    if(o.prev&&!o.prev._gone){ev('舊的 abort()');try{o.prev.abort()}catch(e){}}
-    ev(`${i+1} call start()`);try{r.start()}catch(e){ev('start 例外 '+e.name);ended=true;out('throw '+e.name)}
+      const ans={tag,n,got:!!txt,raw:txt,ok:parseScore(txt)===n,err,open:op,heard,rec:r};
+      if(o.keep&&txt)return res(ans);
+      if(!ended){ev(tag+' stop()');try{r.stop()}catch(e){}await Promise.race([new Promise(z=>endCb=z),zz(1500)])}
+      if(!ended){ev(tag+' abort()');try{r.abort()}catch(e){}await zz(300)}
+      res(ans)};
+    ['audiostart','speechstart','speechend','audioend'].forEach(k=>r['on'+k]=()=>{ev(`${tag} ${k}`);if(k==='speechstart')heard=true});
+    r.onstart=()=>{ev(`${tag} start`);op=performance.now()-t0;if(!fin)rcShow('收音中，請說',null,'live')};
+    r.onerror=e=>{ev(`${tag} error ${e.error}`);r._e=e.error};
+    r.onresult=e=>{const all=[...e.results].map(x=>x[0].transcript.trim()).join(' ');ev(`${tag} result “${all}”`);r._all=all;heard=true;if(fin){r._more?.(all);return}txt=all;$('raw').textContent=txt;clearTimeout(q);q=setTimeout(()=>out(''),SETTLE)};
+    r.onend=()=>{ev(`${tag} end`);ended=r._gone=true;endCb?.();r._dead?.();if(!fin)out(txt?'':r._e||'自己結束')};
+    $('skip').disabled=false;rcSkip=()=>{ev(tag+' 使用者略過');out('唸了沒反應')};
+    rcShow('啟動麥克風…');
+    if(o.prev&&!o.prev._gone){ev(tag+' 關舊的');try{o.prev.abort()}catch(e){}}
+    ev(tag+' call start()');try{r.start()}catch(e){ev('start 例外 '+e.name);ended=true;out('throw '+e.name)}
   });
 }
-// 舊的收音如果還活著，直接聽它
-function rcMore(r,n){return new Promise(res=>{
-  if(r._gone){ev('舊的收音已結束');return res(null)}
-  const b=r._all||'';let t='',q;const end=()=>{clearTimeout(w);clearTimeout(q);r._more=null;rcSkip=null;$('skip').disabled=true;res(t?{n,got:true,raw:t,ok:parseScore(t)===n,err:''}:null)};
-  const w=setTimeout(end,8000);$('skip').disabled=false;rcSkip=end;rcShow('舊的收音還在，請直接說',null,'live');
-  r._more=a=>{const d=a.toLowerCase().startsWith(b.toLowerCase())?a.slice(b.length).trim():a;if(!d)return;t=d;$('raw').textContent=t;clearTimeout(q);q=setTimeout(end,SETTLE)};
+function rcMore(r,n,tag){return new Promise(res=>{ // 什麼都不做，直接聽舊的收音
+  if(!r||r._gone){ev('舊的收音已結束');return res({tag,n,got:false,raw:'',ok:false,err:'舊的收音已結束'})}
+  const b=r._all||'';let t='',q,done=false;
+  const end=err=>{if(done)return;done=true;clearTimeout(w);clearTimeout(q);r._more=r._dead=null;rcSkip=null;$('skip').disabled=true;res({tag,n,got:!!t,raw:t,ok:parseScore(t)===n,err:t?'':err})};
+  const w=setTimeout(()=>end('沒收到'),12000);$('skip').disabled=false;rcSkip=()=>{ev(tag+' 使用者略過');end('唸了沒反應')};r._dead=()=>end('舊的收音已結束');rcShow('請直接說',null,'live');
+  r._more=a=>{const d=a.toLowerCase().startsWith(b.toLowerCase())?a.slice(b.length).trim():a;if(!d)return;t=d;$('raw').textContent=t;clearTimeout(q);q=setTimeout(()=>end(''),SETTLE)};
 })}
-// 等使用者切出去又回來
 function rcAway(){return new Promise(res=>{
-  let out=0;const f=()=>{if(document.hidden){out=performance.now();ev('切出去')}else if(out){ev(`回來（${((performance.now()-out)/1000).toFixed(1)}s）`);document.removeEventListener('visibilitychange',f);rcGo=null;setTimeout(res,600)}};
+  let out=0;const f=()=>{if(document.hidden)out=performance.now();else if(out){ev(`回來（${((performance.now()-out)/1000).toFixed(1)}s）`);off();setTimeout(res,600)}},off=()=>{document.removeEventListener('visibilitychange',f);rcGo=null};
   document.addEventListener('visibilitychange',f);
-  $('tg').classList.add('w');$('tg').style.fontSize='30px';$('tg').textContent='請切到主畫面';$('hint').textContent='等 5 秒，再回到 Safari';
-  rcShow('回來後會自動繼續','我已經切出去又回來');rcGo=()=>{ev('手動繼續');document.removeEventListener('visibilitychange',f);res()};
+  rcTitle('請切到主畫面','等 5 秒，再回到 Safari',30);rcShow('回來後會自動繼續','我已經切出去又回來');rcGo=()=>{ev('手動繼續');off();res()};
 })}
-const rcKeepOff=r=>{if(r&&!r._gone)try{r.abort()}catch(e){}};
-async function rcRun(){
-  const keys=Object.keys(RM);if(RC.k>=keys.length)return rcEnd();
-  const m=keys[RC.k],me=RC,after=!!RC.left?.log.length,L=RC.left?.log||[];
-  if(!RC.left)RC.left={m,q:shuf([26,45,60,81,100,140,41,85,57,96]).slice(0,3),log:L};
-  const q=RC.left.q,away=m==='away'||m==='awayre';ev('===== '+RM[m]+(after?' 重新整理後':''));
-  if(!after){
-    $('prog').textContent=`恢復 ${RC.k+1} / ${keys.length}`;$('tg').textContent=RM[m];$('tg').classList.add('w');$('tg').style.fontSize='26px';
-    $('hint').textContent=away?'唸一題 → 切到主畫面 5 秒 → 回來再唸':'共 3 題，只點這一次，之後直接說';
-    await rcWait('每種方法開始前頁面會重新整理','開始這個方法');
-  }
-  $('hint').textContent='';
-  const show=async o=>{const{rec,...p}=o;L.push(p);rcShow(p.got?'有收到：'+p.raw:'這題沒收到（'+p.err+'）',null,p.got?'good':'bad');await zz(1100);return RC===me};
-  const go=(i,first,opt)=>{rcNum(q[i],i);rcShow('啟動麥克風…');return rcCap(m,q[i],first?0:i,opt)};
-  let o,last=null;
-  if(after){ // awayre：剛重新整理完
-    o=await go(1,false);if(RC!==me)return;
-    if(!o.got){await rcWait('沒收到，點一下再試','點一下開始說');const p=await go(1,true);if(RC!==me)return;o={...p,note:'自動失敗，點一下'+(p.got?'後收到':'也沒收到')}}
-    if(!await show(o))return;
-  }else if(away){
-    o=await go(0,true,{keep:true});if(RC!==me)return;last=o.rec;if(!await show(o))return rcKeepOff(last);
-    await rcAway();if(RC!==me)return rcKeepOff(last);
-    $('hint').textContent='';
-    if(m==='awayre'){rcKeepOff(last);await zz(100);rcFlush();rcSave();return location.reload()}
-    rcNum(q[1],1);const a=last?await rcMore(last,q[1]):null;if(RC!==me)return rcKeepOff(last);
-    if(a){if(!await show({...a,note2:'舊的收音沒斷'}))return;rcKeepOff(last)}
-    else{await rcWait('舊的收音收不到了','點一下開始說');const p=await go(1,true,{prev:last});if(RC!==me)return;
-      if(!await show({...p,note2:'點一下重開'}))return}
-  }else for(let i=0;i<3;i++){
-    const hand=m==='hand';o=await go(i,i===0,hand?{keep:true,prev:last}:{});if(RC!==me)return rcKeepOff(o.rec);
-    last=o.rec||null;if(!await show(o))return rcKeepOff(last);
-  }
-  if(RC!==me)return;
-  rcKeepOff(last);RC.res.push({m,log:L});RC.left=null;RC.k++;rcFlush();rcSave();location.reload();
+const rcOff=r=>{if(r&&!r._gone)try{r.abort()}catch(e){}};
+/* 音效保持開啟：整段播放極小聲的低音，題間再叮一聲 */
+let KA=null;
+function keepOn(){try{KA??=new(window.AudioContext||window.webkitAudioContext)();KA.resume();const o=KA.createOscillator(),g=KA.createGain();o.frequency.value=40;g.gain.value=.002;o.connect(g).connect(KA.destination);o.start();KA._o=o}catch(e){ev('音效無法開啟 '+e.name)}}
+function keepOff(){if(KA){try{KA._o.stop();KA.close()}catch(e){}KA=null}}
+function beep(){if(!KA)return;ev('音效 '+KA.state);const o=KA.createOscillator(),g=KA.createGain(),t=KA.currentTime;o.frequency.value=1319;g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.35);o.connect(g).connect(KA.destination);o.start(t);o.stop(t+.4)}
+/* 直接量麥克風音量，不經過語音辨識 */
+async function meter(sec){
+  const o={peak:0,muted:null,state:'',err:''};let st=null,ac=null;
+  try{
+    st=await Promise.race([navigator.mediaDevices.getUserMedia({audio:true}),zz(15000).then(()=>{throw{name:'逾時'}})]);
+    const tr=st.getAudioTracks()[0];ac=new(window.AudioContext||window.webkitAudioContext)();await Promise.race([ac.resume(),zz(1000)]);
+    const a=ac.createAnalyser();a.fftSize=2048;ac.createMediaStreamSource(st).connect(a);const d=new Float32Array(2048),end=performance.now()+sec*1000;
+    while(performance.now()<end){a.getFloatTimeDomainData(d);let s=0;for(const x of d)s+=x*x;const v=Math.sqrt(s/d.length);o.peak=Math.max(o.peak,v);
+      $('tg').textContent='音量 '+Math.min(100,Math.round(v*400));await zz(80)}
+    o.muted=tr.muted;o.state=tr.readyState+'／'+ac.state;
+  }catch(e){o.err=e.name||'錯誤'}
+  o.close=()=>{try{st?.getTracks().forEach(t=>t.stop());ac?.close()}catch(e){}};
+  ev(`量麥克風 最大 ${o.peak.toFixed(4)} muted ${o.muted} ${o.state} ${o.err}`);return o;
 }
-function rcFlush(){RC.ev.push(...EV);EV=[]}
+async function rcRun(){
+  if(RC.k>=RK.length)return rcEnd();
+  const m=RK[RC.k],me=RC,L=[],q=shuf([26,45,60,81,100,140,41,85,57,96]);let i=0,last=null;
+  RC.cur={m,log:L};ev('===== '+RM[m]+(used()?'（同一分頁）':'（新分頁）'));rcHead();
+  rcTitle(RM[m],{audio:'會有叮咚聲，共 3～4 題，直接唸',away:'唸一題 → 切到主畫面 5 秒 → 回來再唸',meter:'唸 2 題，再對麥克風說幾秒話'}[m],26);
+  await rcWait('看到數字就用英文唸','開始',()=>{used(true);if(m==='audio')keepOn()});
+  if(RC!==me)return;
+  // 每題收完：記錄並顯示
+  const put=async o=>{const{rec,...p}=o;L.push(p);rcSave();rcShow(p.got?'有收到：'+p.raw:'沒收到（'+p.err+'）',null,p.got?'good':'bad');if(m==='audio')beep();await zz(1200);return RC===me};
+  const go=async(tag,opt)=>{rcNum(q[i++],tag);const o=await rcCap(q[i-1],tag,opt);if(RC!==me){rcOff(o.rec);return null}last=o.got&&opt.keep?o.rec:null;return await put(o)?o:(rcOff(o.rec),null)};
+  let o;
+  if(!(o=await go('首題',{first:true,keep:true})))return;
+  if(m==='audio'){
+    const a=await go('立即接續',{keep:true,prev:last});if(!a)return;
+    rcOff(last);last=null;await zz(1500);if(RC!==me)return; // 故意隔一段時間
+    const b=await go('隔 1.5 秒再接',{});if(!b)return;
+    if(!b.got){await rcWait('自動沒收到，點一下再試','點一下開始說');if(RC!==me)return;if(!await go('點一下再接',{}))return}
+  }
+  if(m==='away'){
+    await rcAway();if(RC!==me)return rcOff(last);
+    rcNum(q[i++],'不動作，直接唸');const a=await rcMore(last,q[i-1],'舊的收音');if(RC!==me)return rcOff(last);
+    if(!await put(a))return rcOff(last);
+    if(!a.got){await rcWait('舊的收音收不到了','點一下開始說');if(RC!==me)return rcOff(last);if(!await go('點一下重開',{prev:last}))return}
+  }
+  if(m==='meter'){
+    rcOff(last);last=null;await zz(1500);if(RC!==me)return;
+    const a=await go('重新收音',{});if(!a)return;
+    rcTitle('音量','',56);let o2;await rcWait('接著直接量麥克風','開始量麥克風');if(RC!==me)return;
+    rcShow('請一直說話 5 秒，例如數 1 到 10',null,'live');o2=await meter(5);if(RC!==me){o2.close();return}
+    L.push({tag:'麥克風音量',meter:true,peak:o2.peak,muted:o2.muted,state:o2.state,err:o2.err});rcSave();
+    rcShow(o2.err?'麥克風打不開：'+o2.err:o2.peak>.01?'麥克風有聲音':'麥克風沒有聲音',null,o2.peak>.01?'good':'bad');await zz(1500);
+    if(RC===me&&!a.got)await go('麥克風開著再收音',{});
+    o2.close();if(RC!==me)return;
+  }
+  rcOff(last);keepOff();RC.res.push({m,log:L});RC.cur=null;RC.k++;rcFlush();rcSave();
+  RC.k>=RK.length?rcEnd():rcNewTab();
+}
+const rcTxt=y=>y.meter?`麥克風音量 ${y.err?'×'+y.err:y.peak.toFixed(4)+(y.peak>.01?' 有聲音':' 沒聲音')+` muted ${y.muted} ${y.state}`}`:`${y.tag} ${y.n}→${y.got?y.raw:'×'+y.err+(y.heard?'（有偵測到說話）':'')}${y.open!=null?'('+(y.open/1000).toFixed(1)+'s)':''}`;
 function rcEnd(){
   if(!RC||RC.done)return;
-  rcSkip?.();rcFlush();if(RC.left?.log.length)RC.res.push({m:RC.left.m,log:RC.left.log});const X=RC;rcClear();rcGo=null;rcSkip=null;
+  const X=RC;rcFlush();if(X.cur?.log.length)X.res.push(X.cur);RC={done:true};rcSkip?.();keepOff();rcClear();rcGo=null;
   $('vol').hidden=true;$('tiles').innerHTML='';
   if(!X.res.length){RC=null;return view('home')}
-  const good=X.res.filter(x=>x.log.length>=2&&x.log.every(y=>y.got&&!y.note));
-  $('verd').textContent=good.length?'可以恢復：'+good.map(x=>RM[x.m]).join('、'):'沒有一種方法能自動恢復';$('verd').className='verd '+(good.length?'ok':'wa');
-  $('verdN').textContent='每題都收到才算成功。';
-  $('h1b').textContent='各方法';$('h2b').textContent='每題紀錄';
-  $('grp').innerHTML='<tr><th>方法</th><th>收到</th></tr>'+X.res.map(x=>`<tr><td>${RM[x.m]}</td><td>${x.log.filter(y=>y.got).length}/${x.log.length}</td></tr>`).join('');
-  $('bad').innerHTML=X.res.map(x=>x.log.map((y,i)=>`<tr><td>${RM[x.m]} ${i+1}</td><td>${y.n}</td><td>${esc(y.got?'聽到 '+y.raw:'沒收到：'+y.err)}${y.note||y.note2?'（'+(y.note||y.note2)+'）':''}</td></tr>`).join('')).join('');
-  $('rep').value=['斷線恢復測試報告（版本 5）',ua,...X.res.map(x=>`${RM[x.m]}：收到 ${x.log.filter(y=>y.got).length}/${x.log.length}｜`+x.log.map(y=>`${y.n}→${y.got?y.raw:'×'+y.err}${y.note||y.note2?'['+(y.note||y.note2)+']':''}`).join('，')),'事件：',...X.ev].join('\n');
-  RC={done:true};view('end');
+  $('verd').textContent=X.res.length===RK.length?'三項都做完了':`只做了 ${X.res.length} / ${RK.length} 項`;$('verd').className='verd '+(X.res.length===RK.length?'ok':'wa');
+  $('verdN').textContent='請按「複製報告」貼給我。';$('h1b').textContent='各項結果';$('h2b').textContent='每題紀錄';
+  $('grp').innerHTML=X.res.map(x=>`<tr><td>${RM[x.m]}</td><td>${x.log.filter(y=>y.got).length}/${x.log.filter(y=>!y.meter).length}</td></tr>`).join('');
+  $('bad').innerHTML=X.res.map(x=>x.log.map(y=>`<tr><td>${RM[x.m]}</td><td></td><td>${esc(rcTxt(y))}</td></tr>`).join('')).join('');
+  $('rep').value=['最後一輪報告（版本 6）',ua,...X.res.map(x=>`${RM[x.m]}：`+x.log.map(rcTxt).join('，')),'事件：',...X.ev].join('\n');
+  view('end');
 }
 setTimeout(rcBoot,0);
 
@@ -496,7 +517,7 @@ function finish(){
     $('volS').onclick=e=>{const b=e.target.closest('button');if(!b)return;const old=SK.vol||'未回答';SK.vol=b.dataset.v;$('rep').value=$('rep').value.replace('叮咚聲 '+old,'叮咚聲 '+SK.vol);$('verdN').textContent=$('verdN').textContent.replace('叮咚聲 '+old,'叮咚聲 '+SK.vol);[...$('volS').children].forEach(x=>{const on=x===b;x.classList.toggle('on',on);x.setAttribute('aria-pressed',on)})}}
   const B=LOG.filter(x=>!x.ok1);
   $('bad').innerHTML=B.length?'<tr><th>題目</th><th>結果</th><th>聽到的文字</th></tr>'+B.map(x=>`<tr><td>${nm(x.n)}</td><td class="${x.ok?'wa':'ng'}">${x.ok?'重說後聽對':nm(x.v)}</td><td>${esc([...x.miss,x.skip?'':x.raw].filter(Boolean).join(' → ')||x.raw)}</td></tr>`).join(''):'<tr><td>全部一次聽對。</td></tr>';
-  $('rep').value=[SK?'長時間測試報告（版本 5）':'語音報分測試報告（版本 5）',...SKL,`題組 ${C.set}｜收音 ${METH[how]}｜音效 ${SK?'後 20 題開':C.snd?'開':'關'}｜口音 ${C.lang}｜${/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':'電腦'}`,ua,
+  $('rep').value=[SK?'長時間測試報告（版本 6）':'語音報分測試報告（版本 6）',...SKL,`題組 ${C.set}｜收音 ${METH[how]}｜音效 ${SK?'後 20 題開':C.snd?'開':'關'}｜口音 ${C.lang}｜${/iPhone|iPad/.test(ua)?'iOS':/Android/.test(ua)?'Android':'電腦'}`,ua,
     `一次聽對 ${k1}/${n}（${pc(k1,n)}）｜聽錯 ${wr}｜聽不懂或跳過 ${un}｜開口到出結果 ${sec(lat)}｜出題到收音 ${sec(open)}`,
     ...Object.entries(G).map(([a,g])=>`${a}：${g[1]}/${g[0]}，聽錯 ${g[2]}`),
     '沒聽對：',...B.map(x=>`${nm(x.n)} → ${x.ok?'重說後聽對':nm(x.v)}｜${[...x.miss,x.raw].join(' → ')}${x.alt?'｜候選中有正解':''}`),
