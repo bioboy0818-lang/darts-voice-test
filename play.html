@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>飛鏢報分訓練（語音版）</title>
+<title>飛鏢報分訓練 V2.0（語音版）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Noto+Sans+TC:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
@@ -89,6 +89,8 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
 .vbar.on span::before{background:#45c97f}.vbar.hot span{color:#fff}.vbar.hot span::before{background:var(--gold)}.vbar.ng span{color:#ffc3bd}.vbar.ng span::before{background:#ff7d72}
 .vbar button{min-height:44px;font-size:15px;padding:0 12px;background:#1f2721;color:var(--cream);border-color:var(--dline)}.vbar.hot button{border-color:var(--gold);color:#fff}
 .vt b{font:800 96px/1 var(--num);color:#fff;font-variant-numeric:tabular-nums}.vt p{margin:0 auto 8px;max-width:300px;min-height:52px;color:var(--cream);font-size:17px;text-wrap:balance}
+#gap{display:grid;grid-template-columns:1.7fr repeat(4,1fr);gap:5px}#gap button{min-width:0;padding:4px 2px;white-space:nowrap}
+.ver{font-size:.5em;font-weight:700;color:var(--dmut);letter-spacing:.02em;vertical-align:.25em}
 /* 落鏢 */
 @media(prefers-reduced-motion:no-preference){.dt{animation:fly .16s ease-in;transform-box:fill-box}@keyframes fly{from{opacity:0;transform:translateY(-26px) scale(1.5)}}}
 /* 檢討 */
@@ -118,7 +120,7 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
 </head>
 <body>
 <main id="home" class="view">
-  <h1>飛鏢報分訓練</h1>
+  <h1>飛鏢報分訓練 <span class="ver">V2.0</span></h1>
   <div class="hero">
     <div><p class="q">這三鏢幾分？</p><p class="p">看落點、心算、報分。</p><button id="heroAns">看答案</button></div>
     <div id="heroBoard"></div>
@@ -188,9 +190,9 @@ try{const o=JSON.parse(localStorage.getItem('scoreSet')||'{}');for(const k in DE
 const save=()=>{try{localStorage.setItem('scoreSet',JSON.stringify(S))}catch(e){}};
 /* ---------- 核心：規則、靶面幾何、對局產生（不碰畫面） ---------- */
 const RULES={open:'Open Out',master:'Master Out',double:'Double Out',triple:'Triple Out'};
-const LV={expert:{name:'專家級',lo:3,hi:7,sig:[5.5,8],w:[0,12,30,34,24],nine:.035,c170:.08,maxForce:170},
-  normal:{name:'普通級',lo:6,hi:15,sig:[8,18],w:[5,9,13,15,15,13,11,9,6,4],nine:.012,c170:.06,maxForce:121},
-  novice:{name:'新手級',lo:10,hi:20,sig:[24,40],w:[2,3,5,8,11,13,14,13,12,10,9],nine:0,c170:0,maxForce:60}};
+const LV={expert:{name:'簡易',lo:3,hi:7,sig:[5.5,8],w:[0,12,30,34,24],nine:.035,c170:.08,maxForce:170},
+  normal:{name:'中等',lo:6,hi:15,sig:[8,18],w:[5,9,13,15,15,13,11,9,6,4],nine:.012,c170:.06,maxForce:121},
+  novice:{name:'隨機',lo:10,hi:20,sig:[24,40],w:[2,3,5,8,11,13,14,13,12,10,9],nine:0,c170:0,maxForce:60}};
 const ORDER=[20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
 const MM=[0,6.35,15.9,99,107,162,170,225];      // 標準硬靶半徑（mm）
 const PX=[0,12,27,91,106,152,168,200];          // 畫面半徑（得分圈略加寬，方便手機辨識）
@@ -475,8 +477,8 @@ const BASE=(()=>{
 })();
 const dartBody=(d,c)=>{let rot=-d.rot;const q=rot*Math.PI/180,dx=200-d.x,dy=200-d.y;
   if(Math.hypot(d.x-50*Math.sin(q)-200,d.y+50*Math.cos(q)-200)>166)rot=Math.atan2(-dx,dy)*180/Math.PI+d.rot*.35; // 鏢身朝靶心，不蓋住外圈數字
-  return`<g transform="translate(${d.x.toFixed(1)} ${d.y.toFixed(1)}) rotate(${rot})"><g class="dt"><path d="M0 2V12" stroke="#e8e8e8" stroke-width="1.6"/><path d="M0 11V27" stroke="#0009" stroke-width="6" stroke-linecap="round"/><path d="M0 11V27" stroke="#c9ccd0" stroke-width="4" stroke-linecap="round"/><path d="M0 28V36" stroke="#333" stroke-width="2.4"/><path d="M0 33L7 40V49L0 46L-7 49V40Z" fill="${c}" stroke="#fff" stroke-width="1"/></g></g>`};
-const dartTip=(d,c)=>`<circle class="dt" cx="${d.x.toFixed(1)}" cy="${d.y.toFixed(1)}" r="4.8" fill="${c}" stroke="#fff" stroke-width="2" style="filter:drop-shadow(0 0 1.5px #000)"/>`;
+  return`<g transform="translate(${d.x.toFixed(1)} ${d.y.toFixed(1)}) rotate(${rot})"><g class="dt"><path d="M0 9V12" stroke="#e8e8e8" stroke-width="1.6"/><path d="M0 11V27" stroke="#0009" stroke-width="6" stroke-linecap="round"/><path d="M0 11V27" stroke="#c9ccd0" stroke-width="4" stroke-linecap="round"/><path d="M0 28V36" stroke="#333" stroke-width="2.4"/><path d="M0 33L7 40V49L0 46L-7 49V40Z" fill="${c}" stroke="#fff" stroke-width="1"/></g></g>`};
+const dartTip=(d,c)=>{const x=d.x.toFixed(1),y=d.y.toFixed(1);return`<g class="dt"><circle cx="${x}" cy="${y}" r="8" fill="none" stroke="#000" stroke-opacity=".75" stroke-width="4.2"/><circle cx="${x}" cy="${y}" r="8" fill="none" stroke="${c}" stroke-width="2.2"/><circle cx="${x}" cy="${y}" r="2.1" fill="#fff" stroke="#000" stroke-width="1.1"/></g>`};
 const COL=['#2f7de0','#f08a24','#e0b341'];
 const boardSVG=(ds,c)=>`<svg class="dart" viewBox="0 0 400 400" role="img" aria-label="飛鏢靶">${BASE}<g>${ds.map(d=>dartBody(d,c)).join('')}</g><g>${ds.map(d=>dartTip(d,c)).join('')}</g></svg>`;
 
@@ -521,20 +523,20 @@ function ruleUI(){
 const inpText=()=>voiceOn()?'語音＋按鍵（英文報分）':'按鍵';
 const ruleText=()=>`紅黑心 ${S.bull==='split'?'25 / 50':'50 / 50'}・${RULES[S.rule]}${$('bfWrap').hidden||S.bf?'':'（紅黑心不可結鏢）'}`;
 const LVNOTE={battle:{expert:'3～7 回合內結鏢。T20 得分，D20／D16 收尾，偶爾出現九鏢或 170 結鏢。',normal:'6～15 回合內結鏢。T20 得分，D20／D16 收尾，偶爾出現九鏢（3 回合）或 170 結鏢。',novice:'10～20 回合內結鏢，也可能雙方都結不了。落點較隨機，結鏢階段偶有界外鏢。'},
-  seq:{expert:'落點取自專家級對局：T20 為主，收尾多為 D20／D16。',normal:'落點取自普通級對局：瞄 T20，偏差較大。',novice:'落點取自新手級對局：分布隨機，偶有界外鏢（0 分）。'}};
+  seq:{expert:'落點集中在 T20，收尾多為 D20／D16，分數規律、好心算。',normal:'瞄 T20 但偏差較大，分數較分散。',novice:'落點隨機分布，分數沒有規律，偶有界外鏢（0 分）。'}};
 let MODE='battle';
 function setup(m){
   MODE=m;const c=S[m];
   $('suT').textContent=m==='battle'?'實戰訓練':'連續報分訓練';
   $('nWrap').hidden=m!=='seq';
   const note=()=>$('lvNote').textContent=LVNOTE[m][c.lv];
-  seg('lv',[['expert','專家級'],['normal','普通級'],['novice','新手級']],()=>c.lv,v=>{c.lv=v;note()});note();
+  seg('lv',[['expert','簡易'],['normal','中等'],['novice','隨機']],()=>c.lv,v=>{c.lv=v;note()});note();
   if(m==='seq')slider('nS','nV',5,20,()=>c.n,v=>c.n=v,v=>v+' 題','題數');
   const lim=()=>{$('limV').textContent=c.inf?'無時限':c.lim+' 秒';$('limS').classList.toggle('off',c.inf)};
   const limSeg=()=>seg('limM',[[false,'限時'],[true,'無時限']],()=>c.inf,v=>{c.inf=v;lim()});
   slider('limS','limV',3,20,()=>c.lim,v=>{c.lim=v;c.inf=false;limSeg();$('limS').classList.remove('off')},v=>v+' 秒','時限秒數');
   limSeg();lim();
-  seg('gap',[[2,'2 秒'],[4,'4 秒'],[6,'6 秒']],()=>c.gap,v=>c.gap=v);
+  seg('gap',[[0,'一次三鏢'],[1,'1 秒'],[2,'2 秒'],[4,'4 秒'],[6,'6 秒']],()=>c.gap,v=>c.gap=v);
   $('suRule').textContent='目前規則：'+ruleText()+(VOK?'・輸入：'+inpText():'');
   show('setup');
 }
@@ -739,7 +741,7 @@ function next(){
 }
 function drop(d,i){
   const g=$('pBoard').querySelectorAll('svg>g'),c=COL[G.m==='battle'?G.cur.side:2],NS=(h,el)=>{const tmp=document.createElementNS('http://www.w3.org/2000/svg','g');tmp.innerHTML=h;el.appendChild(tmp.firstChild)};
-  NS(dartBody(d,c),g[0]);NS(dartTip(d,c),g[1]);SFX.hit();
+  NS(dartBody(d,c),g[0]);NS(dartTip(d,c),g[1]);if(G.c.gap||!i)SFX.hit();
   G.n=i+1;topUI();
   if(G.n===G.cur.ds.length){G.ph='input';G.t0=T;G.dl=G.c.inf?null:T+G.c.lim*1000;msg(vUse()?'請報分':'請輸入合計');vListen()}
   else msg(`第 ${G.n} 鏢`);
