@@ -128,7 +128,9 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
     <button class="mode" data-mode="seq"><b>連續報分訓練</b><span>固定題數連續作答，最後檢討錯題</span><i aria-hidden="true">›</i></button>
     <button class="mode" data-mode="single"><b>單題報分訓練</b><span>進入即出題，不限時，答錯立刻看解答</span><i aria-hidden="true">›</i></button>
     <details id="inpBox" hidden><summary>輸入方式<span id="inpSum"></span></summary>
-      <div class="fields"><div class="seg" id="inp"></div>
+      <div class="fields" id="inpExt" hidden><p class="note">LINE 等 App 裡的瀏覽器不能用語音，目前只能用按鍵。要用語音報分，請改用手機的瀏覽器開啟。</p>
+      <button type="button" id="extGo">用瀏覽器開啟</button><p class="note" id="extHint" hidden>沒有跳出去的話：點右上角「⋮」或「⋯」選單，選「用預設瀏覽器開啟」或「以 Safari 開啟」。</p></div>
+      <div class="fields" id="inpOn"><div class="seg" id="inp"></div>
       <p class="note">語音模式用英文報分，例如 one forty、sixty，0 分說 no score。按鍵隨時可用。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本程式不錄音。</p></div>
     </details>
     <details id="ruleBox"><summary>硬靶規則<span id="ruleSum"></span></summary>
@@ -510,8 +512,9 @@ function ruleUI(){
   seg('bf',[[true,'可以'],[false,'不行']],()=>S.bf,v=>{S.bf=v;ch()});
   seg('bust',[['zero','報 0 分','正式計分'],['sum','報三鏢合計','純練加法']],()=>S.bust,v=>{S.bust=v;ch()});
   seg('snd',[[true,'開'],[false,'關']],()=>S.snd,v=>{S.snd=v;if(v)SFX.ok()});
-  $('inpBox').hidden=!VOK;
+  $('inpBox').hidden=!VOK&&!INAPP;
   if(VOK){seg('inp',[['key','按鍵'],['voice','語音＋按鍵']],()=>S.inp,v=>{S.inp=v;if(v==='key')V.close();$('inpSum').textContent=inpText()});$('inpSum').textContent=inpText()}
+  else if(INAPP){$('inpSum').textContent='語音需用瀏覽器開啟';$('inpOn').hidden=true;$('inpExt').hidden=false}
   $('bfWrap').hidden=!(S.rule==='triple'||S.bull==='fat'&&S.rule!=='open');
   $('ruleSum').textContent=ruleText();
 }
@@ -544,6 +547,12 @@ const after=(ms,fn)=>Qe.push({t:T+ms,fn});
 const SRC=window.SpeechRecognition||window.webkitSpeechRecognition;
 const VOK=!!SRC&&isSecureContext&&location.protocol!=='file:'&&window.top===window&&!/ Claude\/|Line\/|FBAN|FBAV|Instagram|MicroMessenger/i.test(navigator.userAgent);
 const voiceOn=()=>VOK&&S.inp==='voice';
+const INAPP=/Line\/|FBAN|FBAV|Instagram|MicroMessenger/i.test(navigator.userAgent);
+$('extGo').onclick=()=>{ // LINE 認得 openExternalBrowser=1；其他 App 在 Android 用 intent 交給瀏覽器
+  $('extHint').hidden=false;const u=new URL(location.href);
+  if(/Line\//i.test(navigator.userAgent)){if(u.searchParams.get('openExternalBrowser')==='1')return;u.searchParams.set('openExternalBrowser','1');location.href=u.href}
+  else if(/Android/.test(navigator.userAgent))location.href='intent://'+u.host+u.pathname+u.search+'#Intent;scheme=https;S.browser_fallback_url='+encodeURIComponent(u.href)+';end';
+};
 const ANDROID=/Android/.test(navigator.userAgent);
 const VERR={'not-allowed':'沒有麥克風權限，請到網站設定改成允許','service-not-allowed':'系統不允許語音服務，請確認已開啟聽寫','audio-capture':'找不到麥克風','language-not-supported':'這支裝置不支援英文辨識'};
 const V={on:false,rec:null,live:false,err:'',bad:false,heard:false,res:[],base:0,skip:-1,mode:'',last:'',cb:null,early:null,en:0,tries:0,renew:0,since:0,tm:0,
