@@ -115,6 +115,11 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
 @media(max-height:740px){#play{gap:6px;min-height:500px}.bar button{min-height:34px}.sc{padding:3px 12px 5px}.sc .v{font-size:44px}.qs b{font-size:26px}
 .pad{grid-template-columns:repeat(4,1fr)}.pad>button{height:48px}.pad [data-k=del]{grid-area:1/4}.pad [data-k="0"]{grid-area:2/4}.pad [data-k=go]{grid-area:3/4}
 .fix{padding:6px 12px}.fix button.big{min-height:44px!important}.cmb .s b{font-size:30px}}
+/* 電腦等橫向畫面：靶面在左、數字鍵在右，整個遊戲畫面不必捲動 */
+@media(min-width:760px) and (min-aspect-ratio:5/4){
+#play{max-width:1000px;min-height:400px;padding-inline:28px;column-gap:28px;grid-template-columns:minmax(0,1fr) minmax(300px,380px);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"bar bar" "top tm" "stage pad"}
+#play>.bar{grid-area:bar}#pTop{grid-area:top}#play>.stage{grid-area:stage}#play>.tm{grid-area:tm;align-self:end}#pad{grid-area:pad;align-self:start}
+.pad{grid-template-columns:repeat(3,1fr)}.pad>button{height:clamp(44px,9vh,64px)}.pad [data-k]{grid-area:auto}}
 [hidden]{display:none!important}
 </style>
 </head>
