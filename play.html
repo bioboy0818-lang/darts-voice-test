@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>飛鏢報分訓練 V2.0（語音版）</title>
+<title>飛鏢報分訓練 V3.0（語音版）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Noto+Sans+TC:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
@@ -126,13 +126,13 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
 </head>
 <body>
 <main id="home" class="view">
-  <h1>飛鏢報分訓練 <span class="ver">V2.0</span></h1>
+  <h1>飛鏢報分訓練 <span class="ver">V3.0</span></h1>
   <div class="hero">
     <div><p class="q">這三鏢幾分？</p><p class="p">看落點、心算、報分。</p><button id="heroAns">看答案</button></div>
     <div id="heroBoard"></div>
   </div>
   <div class="stack">
-    <button class="mode" data-mode="battle"><b>實戰訓練</b><span>501 雙方對戰，每回合報出三鏢合計</span><i aria-hidden="true">›</i></button>
+    <button class="mode" data-mode="battle"><b>實戰訓練</b><span>501 雙方對戰，可練報分、計分或兩者</span><i aria-hidden="true">›</i></button>
     <button class="mode" data-mode="calc"><b>報分計分訓練</b><span>單人出鏢，報出三鏢合計後再輸入剩餘分數</span><i aria-hidden="true">›</i></button>
     <button class="mode" data-mode="seq"><b>連續報分訓練</b><span>固定題數連續作答，最後檢討錯題</span><i aria-hidden="true">›</i></button>
     <button class="mode" data-mode="single"><b>單題報分訓練</b><span>進入即出題，不限時，答錯立刻看解答</span><i aria-hidden="true">›</i></button>
@@ -142,7 +142,7 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
       <div class="fields" id="inpOn"><div class="seg" id="inp"></div>
       <p class="note">語音模式用英文報分，例如 one forty、sixty，0 分說 no score。按鍵隨時可用。聲音由瀏覽器的語音服務辨識，可能傳到 Apple 或 Google；本程式不錄音。</p></div>
     </details>
-    <details id="ruleBox"><summary>硬靶規則<span id="ruleSum"></span></summary>
+    <details id="ruleBox"><summary>訓練規則設定<span id="ruleSum"></span></summary>
       <div class="fields">
         <div><div class="h">結鏢規則</div><div class="seg" id="rule"></div></div>
         <div><div class="h">紅黑心分數</div><div class="seg" id="bull"></div></div>
@@ -159,6 +159,7 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
   <div class="stack">
     <div><div class="h">等級</div><div class="seg" id="lv"></div><p class="note" id="lvNote" style="margin-top:8px"></p></div>
     <div id="fromWrap" hidden><div class="h">起始分數</div><div class="seg" id="from"></div></div>
+    <div id="taskWrap" hidden><div class="h">報分、計分設定</div><div class="seg" id="task"></div><p class="note" id="taskNote" style="margin-top:8px"></p></div>
     <div id="nWrap"><div class="h"><span>出題題數</span><em id="nV"></em></div><div class="sld" id="nS"></div></div>
     <div><div class="h"><span>輸入時限</span><em id="limV"></em></div><div class="sld" id="limS"></div><div class="seg" id="limM" style="margin-top:6px"></div><p class="note" style="margin-top:6px">最後一鏢上靶後才開始倒數。</p></div>
     <div><div class="h">每鏢上靶間隔</div><div class="seg" id="gap"></div></div>
@@ -192,7 +193,7 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
 {
 const $=id=>document.getElementById(id);
 const DEF={rule:'double',bull:'split',bf:true,bust:'zero',snd:true,inp:'key',
-  battle:{lv:'normal',lim:10,inf:false,gap:2},seq:{lv:'normal',lim:10,inf:false,gap:2,n:10},calc:{lv:'normal',lim:10,inf:false,gap:2,from:501}};
+  battle:{lv:'normal',lim:10,inf:false,gap:2,task:'say'},seq:{lv:'normal',lim:10,inf:false,gap:2,n:10},calc:{lv:'normal',lim:10,inf:false,gap:2,from:501}};
 let S=JSON.parse(JSON.stringify(DEF));
 try{const o=JSON.parse(localStorage.getItem('scoreSet')||'{}');for(const k in DEF)if(k in o)S[k]=typeof DEF[k]==='object'?{...DEF[k],...o[k]}:o[k]}catch(e){}
 const save=()=>{try{localStorage.setItem('scoreSet',JSON.stringify(S))}catch(e){}};
@@ -544,7 +545,9 @@ let MODE='battle';
 function setup(m){
   MODE=m;const c=S[m];
   $('suT').textContent={battle:'實戰訓練',seq:'連續報分訓練',calc:'報分計分訓練'}[m];
-  $('nWrap').hidden=m!=='seq';$('fromWrap').hidden=m!=='calc';
+  $('nWrap').hidden=m!=='seq';$('fromWrap').hidden=m!=='calc';$('taskWrap').hidden=m!=='battle';
+  if(m==='battle'){const tn=()=>$('taskNote').textContent={say:'三鏢上靶後報出合計（語音或按鍵）。',calc:'三鏢上靶後自動算出合計，你用按鍵輸入剩餘分數。',both:'先報出合計，再用按鍵輸入剩餘分數。'}[c.task||'say'];
+    seg('task',[['say','報分'],['calc','計分'],['both','報分＋計分']],()=>c.task||'say',v=>{c.task=v;tn()});tn()}
   if(m==='calc')seg('from',[[301,'301'],[501,'501'],[701,'701']],()=>c.from,v=>c.from=v);
   const note=()=>$('lvNote').textContent=LVNOTE[m][c.lv];
   seg('lv',[['expert','簡易'],['normal','中等'],['novice','隨機']],()=>c.lv,v=>{c.lv=v;note()});note();
@@ -727,6 +730,7 @@ function start(m){
   audio();MODE=m;Qe=[];T=0;paused=false;$('ov').hidden=true;
   const c=m==='single'?{inf:true,gap:2}:S[m];
   G={m,c:{...c},i:-1,log:[],ph:'',ent:'',ok:0,streak:0,lv:c.lv};
+  G.task=m==='calc'?'both':m==='battle'?(c.task||'say'):'say';G.cok=0;if(G.task==='calc')G.nov=true;
   if(m==='battle'){G.leg=genMatch(c.lv);G.seq=G.leg.seq;G.sc=[501,501]}
   else if(m==='calc'){G.leg=genSolo(c.lv,c.from);G.seq=G.leg.seq;G.sc=[c.from];G.cok=0}
   else G.seq=m==='seq'?genTurns(c.lv,c.n):genTurns('mix',20);
@@ -737,7 +741,7 @@ function start(m){
   $('pBoard').innerHTML=boardSVG([],'');
   [$('aL'),$('aR')].forEach(e=>box(e,'','',''));
   vReset();vKey='';padUI();show('play');
-  if(!voiceOn()){V.close();return next()}
+  if(!voiceOn()||G.task==='calc'){V.close();return next()}
   $('pInfo').textContent='試音';V.heard&&V.on?next():micTest();
 }
 function box(el,cls,v,t){el.className='ans '+(el.id==='aL'?'l':'r')+' '+cls;el.children[0].textContent=v;el.children[1].textContent=t}
@@ -753,7 +757,7 @@ function next(){
   const g=$('pBoard').querySelectorAll('svg>g');g.forEach(e=>e.innerHTML='');
   topUI();
   if(G.m==='calc'){box($('aL'),'act','','報分');box($('aR'),'','','剩餘')}
-  else if(G.m==='battle')[0,1].forEach(s=>{const e=s?$('aR'):$('aL');if(s===t.side)box(e,'act','','報分')});
+  else if(G.m==='battle')[0,1].forEach(s=>{const e=s?$('aR'):$('aL');if(s===t.side)box(e,'act','',G.task==='calc'?'計分':'報分')});
   else{const p=G.log[G.log.length-1];box($('aL'),'act','','本題');
     p?box($('aR'),p.ok?'ok':'ng',p.in==null?'—':p.in,'上一題 '+(p.ok?'✓':'✗')):box($('aR'),'','','上一題')}
   msg(G.m==='battle'?`${t.side?'橘':'藍'}方進攻`:'看鏢');
@@ -763,6 +767,7 @@ function drop(d,i){
   const g=$('pBoard').querySelectorAll('svg>g'),c=COL[G.m==='battle'?G.cur.side:2],NS=(h,el)=>{const tmp=document.createElementNS('http://www.w3.org/2000/svg','g');tmp.innerHTML=h;el.appendChild(tmp.firstChild)};
   NS(dartBody(d,c),g[0]);NS(dartTip(d,c),g[1]);if(G.c.gap||!i)SFX.hit();
   G.n=i+1;topUI();
+  if(G.n===G.cur.ds.length&&G.task==='calc')return autoSay();
   if(G.n===G.cur.ds.length){G.ph='input';G.t0=T;G.dl=G.c.inf?null:T+G.c.lim*1000;msg(vUse()?'請報分':'請輸入合計');vListen()}
   else msg(`第 ${G.n} 鏢`);
 }
@@ -798,7 +803,7 @@ function key(k){
   if(G.ph==='calc'){
     if(k==='go'){if(G.ent==='')return msg('先輸入剩餘分數');return calcGrade(+G.ent)}
     if(k==='del')G.ent=G.ent.slice(0,-1);else if(G.ent==='0')G.ent=k;else if(G.ent.length<3)G.ent+=k;
-    $('aR').children[0].textContent=G.ent;return}
+    calcBox().children[0].textContent=G.ent;return}
   if(G.ph!=='darts'&&G.ph!=='input')return;
   if(G.ph==='input'&&G.conf&&k==='go'){const c=G.conf;G.conf=null;return grade(c.v,c.raw)}
   if(G.ph==='input'&&vCancel())msg('請報分');
@@ -819,11 +824,11 @@ function grade(v,raw){
   if(ok){G.ok++;G.streak++;SFX.ok()}else{G.streak=0;SFX.ng()}
   box(myBox(),ok?'ok':'ng',v==null?'—':v,ok?'正確':v==null?'逾時':'錯誤');
   let m=ok?'正確':v==null?'時間到':'錯誤',wait=1300;
+  if(G.task!=='say'){if(!ok)box(myBox(),'ng',v==null?'—':v,'應報 '+t.ans);msg(ok?'報分正確':(v==null?'時間到':'報分錯誤')+'，應報 '+t.ans);return after(ok?700:1300,calcAsk)}
   if(G.m==='battle'){
     G.sc[t.side]=t.end;wait=1700;
     if(t.bust)m+='・爆鏢，分數不變';else if(t.fin){m+='・結鏢';wait=2600;SFX.win()}else m+=`・−${t.sum}`;
   }
-  if(G.m==='calc'){if(!ok)box(myBox(),'ng',v==null?'—':v,'應報 '+t.ans);msg(ok?'報分正確':(v==null?'時間到':'報分錯誤')+'，應報 '+t.ans);return after(ok?700:1300,calcAsk)}
   topUI();msg(m);
   if(G.m==='single'&&!ok){
     G.ph='fix';const d=t.ds;
@@ -834,13 +839,16 @@ function grade(v,raw){
   }
   after(wait,next);
 }
-function calcAsk(){if(!G)return;G.ph='calc';G.ent='';G.t1=T;G.dl=G.c.inf?null:T+G.c.lim*1000;box($('aR'),'act','','剩餘分數');msg('請輸入剩餘分數')}
+const calcBox=()=>G.m==='calc'?$('aR'):myBox();
+function autoSay(){const t=G.cur;G.ph='shown';G.log.push({t,in:t.ans,ok:true,ans:t.ans,sec:0,raw:null,miss:[],auto:true});G.ok++;
+  box(myBox(),'ok',t.ans,'合計');msg(t.bust?(S.bust==='zero'?'爆鏢，記 0 分':'爆鏢，分數不計'):'合計 '+t.sum);after(900,calcAsk)}
+function calcAsk(){if(!G)return;G.ph='calc';G.ent='';G.t1=T;G.dl=G.c.inf?null:T+G.c.lim*1000;box(calcBox(),'act','','剩餘分數');const t=G.cur;msg(t.bust?'爆鏢，請輸入剩餘分數':`${t.start} − ${t.ans} ＝ ？`)}
 function calcGrade(v){
   const t=G.cur,x=G.log[G.log.length-1],ok=v===t.end;G.ph='shown';
-  x.calc={in:v,ok,ans:t.end,sec:Math.min(v==null&&!G.c.inf?G.c.lim:1e9,(T-G.t1)/1000)};
+  x.calc={in:v,ok,ans:t.end,sec:Math.min(v==null&&!G.c.inf?G.c.lim:1e9,(T-G.t1)/1000)};if(x.auto)x.sec=x.calc.sec;
   if(ok){G.cok++;SFX.ok()}else SFX.ng();
-  box($('aR'),ok?'ok':'ng',v==null?'—':v,ok?'正確':'應為 '+t.end);
-  G.sc[0]=t.end;topUI();
+  box(calcBox(),ok?'ok':'ng',v==null?'—':v,ok?'正確':'應為 '+t.end);
+  G.sc[t.side]=t.end;topUI();
   let m=(ok?'計分正確':v==null?'時間到':'計分錯誤')+'，剩 '+t.end,wait=1700;
   if(t.bust)m+='（爆鏢，分數不變）';else if(t.fin){m=ok?'結鏢！':'計分錯誤，已結鏢（0）';wait=2600;SFX.win()}
   msg(m);after(wait,next);
@@ -871,11 +879,11 @@ function finish(early){
     if(early){w='提前結束';p=`藍方剩 ${g.sc[0]}，橘方剩 ${g.sc[1]}`}
     else if(m.winner<0){w='雙方皆未結鏢';p=`打滿 ${m.rounds} 回合，藍方剩 ${g.sc[0]}，橘方剩 ${g.sc[1]}`}
     else{const l=g.log[n-1].t;w=`${m.winner?'橘':'藍'}方第 ${m.rounds} 回合結鏢${m.tag?'・'+m.tag:''}`;p=`${l.start} 分，以 ${l.ds.map(d=>d.l).join(' ')} 收尾`}
-    p+=`<br>三鏢平均：藍方 ${av(0)}／橘方 ${av(1)}・${LV[g.lv].name}`;
+    p+=`<br>三鏢平均：藍方 ${av(0)}／橘方 ${av(1)}・${LV[g.lv].name}${g.task!=='say'?'・'+{calc:'計分',both:'報分＋計分'}[g.task]:''}`;
   }else if(g.m==='calc'){const L=g.log[n-1].t;
     w=early?'提前結束':L.fin?`第 ${L.rd} 回合結鏢`:`打滿 ${L.rd} 回合未結鏢`;p=`${g.c.from} 起，剩 ${g.sc[0]}・${LV[g.lv].name}`;
   }else{w=ok===n?'全部答對':`答錯 ${n-ok} 題`;p=g.m==='seq'?LV[g.lv].name+(early?'・提前結束':''):'單題報分'}
-  $('rHead').innerHTML=`<div><div class="w">${w}</div><div class="p">${p}</div></div><div class="tiles">${g.m==='calc'?`<div><b>${ok}/${n}</b><span>報分答對</span></div><div><b>${g.cok}/${n}</b><span>計分答對</span></div>`:`<div><b>${ok}/${n}</b><span>答對</span></div><div><b>${Math.round(ok/n*100)}%</b><span>正確率</span></div>`}<div><b>${avg} 秒</b><span>平均作答</span></div></div>`;
+  $('rHead').innerHTML=`<div><div class="w">${w}</div><div class="p">${p}</div></div><div class="tiles">${g.task==='calc'?`<div><b>${g.cok}/${n}</b><span>計分答對</span></div><div><b>${Math.round(g.cok/n*100)}%</b><span>正確率</span></div>`:g.task==='both'?`<div><b>${ok}/${n}</b><span>報分答對</span></div><div><b>${g.cok}/${n}</b><span>計分答對</span></div>`:`<div><b>${ok}/${n}</b><span>答對</span></div><div><b>${Math.round(ok/n*100)}%</b><span>正確率</span></div>`}<div><b>${avg} 秒</b><span>平均作答</span></div></div>`;
   const vn=g.log.filter(x=>x.raw!=null).length,ms=g.log.reduce((a,x)=>a+x.miss.length,0);
   $('rVoice').hidden=!(vn||ms||V.on);$('rVoice').textContent=`語音作答 ${vn} 題，聽不懂重說 ${ms} 次。${V.on?'麥克風仍開著，回首頁就會關閉。':''}`;
   FL=g.log.every(good)?'all':'bad';list();show('result');
@@ -886,7 +894,7 @@ function list(){
   const L=R.log.map((x,i)=>({x,i})).filter(o=>FL==='all'||!good(o.x));
   $('rList').innerHTML=L.length?L.map(({x,i})=>{const t=x.t,b=R.m==='battle'||R.m==='calc';
     const sub=b?`${t.start} → ${t.end}${t.bust?'（爆鏢）':t.fin?'（結鏢）':''}${x.calc?`・計分${x.calc.ok?'✓':'✗'}`:''}`:`作答 ${x.sec.toFixed(1)} 秒`;
-    return`<div><button class="it ${good(x)?'ok':'ng'}" data-i="${i}" aria-expanded="false"><span class="n ${b?(t.side?'r':'l'):''}">${b?'R'+t.rd:i+1}</span><span class="d">${t.ds.map(d=>d.l).join(' · ')}<small>${sub}</small></span><span class="a"><b>${x.ans}</b>${x.ok?'正確':x.in==null?'逾時':'你報 '+x.in}</span></button></div>`}).join(''):'<p class="note">沒有錯題。</p>';
+    return`<div><button class="it ${good(x)?'ok':'ng'}" data-i="${i}" aria-expanded="false"><span class="n ${b?(t.side?'r':'l'):''}">${b?'R'+t.rd:i+1}</span><span class="d">${t.ds.map(d=>d.l).join(' · ')}<small>${sub}</small></span><span class="a"><b>${x.ans}</b>${x.auto?'自動計分':x.ok?'正確':x.in==null?'逾時':'你報 '+x.in}</span></button></div>`}).join(''):'<p class="note">沒有錯題。</p>';
 }
 $('rList').onclick=e=>{const b=e.target.closest('.it');if(!b)return;const p=b.parentNode,o=p.querySelector('.exp');
   b.setAttribute('aria-expanded',!o);
