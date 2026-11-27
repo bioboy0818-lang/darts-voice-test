@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>飛鏢報分訓練 V3.0（語音版）</title>
+<title>飛鏢報分訓練 V3.1（語音版）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Noto+Sans+TC:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
@@ -126,7 +126,7 @@ svg.dart .num{font:800 19px var(--num);fill:#f5f0e2;text-anchor:middle;dominant-
 </head>
 <body>
 <main id="home" class="view">
-  <h1>飛鏢報分訓練 <span class="ver">V3.0</span></h1>
+  <h1>飛鏢報分訓練 <span class="ver">V3.1</span></h1>
   <div class="hero">
     <div><p class="q">這三鏢幾分？</p><p class="p">看落點、心算、報分。</p><button id="heroAns">看答案</button></div>
     <div id="heroBoard"></div>
@@ -870,7 +870,7 @@ document.addEventListener('keydown',e=>{
 /* ---------- 檢討 ---------- */
 let R=null,FL='bad';
 function finish(early){
-  const g=G;G=null;Qe=[];paused=false;$('ov').hidden=$('vt').hidden=true;V.mute();V.early=null;
+  const g=G;G=null;Qe=[];paused=false;$('ov').hidden=$('vt').hidden=true;V.close();
   if(!g.log.length)return home();
   R=g;const n=g.log.length,ok=g.ok,avg=(g.log.reduce((a,x)=>a+x.sec,0)/n).toFixed(1);
   let w,p;
@@ -885,7 +885,7 @@ function finish(early){
   }else{w=ok===n?'全部答對':`答錯 ${n-ok} 題`;p=g.m==='seq'?LV[g.lv].name+(early?'・提前結束':''):'單題報分'}
   $('rHead').innerHTML=`<div><div class="w">${w}</div><div class="p">${p}</div></div><div class="tiles">${g.task==='calc'?`<div><b>${g.cok}/${n}</b><span>計分答對</span></div><div><b>${Math.round(g.cok/n*100)}%</b><span>正確率</span></div>`:g.task==='both'?`<div><b>${ok}/${n}</b><span>報分答對</span></div><div><b>${g.cok}/${n}</b><span>計分答對</span></div>`:`<div><b>${ok}/${n}</b><span>答對</span></div><div><b>${Math.round(ok/n*100)}%</b><span>正確率</span></div>`}<div><b>${avg} 秒</b><span>平均作答</span></div></div>`;
   const vn=g.log.filter(x=>x.raw!=null).length,ms=g.log.reduce((a,x)=>a+x.miss.length,0);
-  $('rVoice').hidden=!(vn||ms||V.on);$('rVoice').textContent=`語音作答 ${vn} 題，聽不懂重說 ${ms} 次。${V.on?'麥克風仍開著，回首頁就會關閉。':''}`;
+  $('rVoice').hidden=!(vn||ms);$('rVoice').textContent=`語音作答 ${vn} 題，聽不懂重說 ${ms} 次。`;
   FL=g.log.every(good)?'all':'bad';list();show('result');
 }
 const good=x=>x.ok&&(!x.calc||x.calc.ok);
